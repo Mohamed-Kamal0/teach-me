@@ -91,17 +91,19 @@ timing requirement demonstrable without touching the database by hand.
 
 **[DEPLOY.md](DEPLOY.md) is the step-by-step runbook.** What follows is why it is built this way.
 
-Two free services, one behind the other:
+Two services, one behind the other:
 
 | Piece | Host | What it serves |
 | :--- | :--- | :--- |
-| Angular client | Vercel (Hobby) | the static SPA, plus a rewrite of `/api/*` |
-| .NET API | Google Cloud Run (always-free tier, Docker) | everything under `/api` |
+| Angular client | Vercel (Hobby, free) | the static SPA, plus a rewrite of `/api/*` |
+| .NET API | Fly.io (`fly.toml`, Docker + volume) | everything under `/api` |
 
-**Why Cloud Run.** .NET 10 is too new for buildpack hosts, so the API has to ship as a Docker image
-— which rules out most free tiers. Cloud Run builds one from the repo root, scales to zero, and its
-free monthly allowance is far larger than this project consumes. It does require a billing account
-with a card on file even to stay free; `render.yaml` is kept as a working no-card fallback.
+**Why Fly.** .NET 10 is too new for buildpack hosts, so the API ships as a Docker image. What sets
+Fly apart from the free tiers is the **volume**: the SQLite database is a persistent file, so data
+survives restarts and redeploys. Every free option has an ephemeral filesystem, which for a SQLite
+app means the database resets on every boot. Fly is not free — expect $0.15–$3 a month depending on
+traffic. Free alternatives (ngrok tunnel, Render, Cloud Run) are kept and documented in
+[DEPLOY.md](DEPLOY.md).
 
 **Why a rewrite and not CORS.** Every API call in the client is a hardcoded relative path —
 there is no `environment.ts` and no API base URL. So the SPA has to be served from an origin
@@ -112,28 +114,33 @@ cross-site XHR would drop it. Replacing the rewrite with CORS breaks login.
 **Vercel.** Import the repository, set **Root Directory to `client/web`**, framework Angular.
 `vercel.json` pins `outputDirectory` to `dist/web/browser` — Angular 18's `application` builder
 puts the browser bundle one level deeper than the preset expects, and getting this wrong serves
-a 404 shell. The rewrite `destination` ships as a placeholder — a Cloud Run URL contains a
-generated project identifier, so it cannot be committed in advance.
+a 404 shell. The rewrite `destination` is committed, because a Fly URL is predictable
+(`https://<app>.fly.dev`) — keep it in step with `app` in `fly.toml`.
 
-**Cloud Run.** `gcloud run deploy --source .` from the repository root; Cloud Build picks up the
-root `Dockerfile`. Configuration is all environment variables (note the **double** underscores,
-which is how .NET maps them onto nested config keys). `--max-instances 1` is not optional: Cloud
-Run's filesystem is in-memory and per-instance, so a second instance would mean a second database
-serving the same site. `--min-instances` must stay at 0 — pinning one warm instance would bill
-around the clock and leave the free allowance behind.
+**Fly.** `fly.toml` carries everything except the admin password, which is a Fly secret
+(`fly secrets set Seed__AdminPassword=...`). The volume mounts at `/app/data` and must live in the
+same region as `primary_region`. Note the **double** underscores in the env vars — that is how .NET
+maps a flat environment variable onto a nested config key.
 
-**`Seed__Demo=true` wipes the database on every container start.** The filesystem is in-memory, so
-the SQLite file is empty on each cold boot; this flag re-runs `DemoSeeder` so the public demo is
-always populated with the credentials above. The consequence is that anything a visitor types is
-gone at the next restart. Never set this flag on a deployment whose data is meant to survive —
-leave it unset and startup falls back to migrate + seed-admin only.
+**One machine only.** A Fly volume attaches to a single machine, and SQLite cannot be shared, so two
+machines would mean two divergent databases behind one URL. `min_machines_running` is 0 with
+`auto_stop_machines`, which keeps the bill near zero; never `fly scale count` above 1.
+
+**`Seed__Demo` must stay unset on Fly.** It drops and re-seeds the database on every start — right
+for a host with no disk, actively destructive here. Seeding is instead a one-time step: set the
+secret, let it boot, unset it (see [DEPLOY.md](DEPLOY.md)).
+
+**`core/interceptors/ngrok.interceptor.ts`** is a leftover from the tunnel setup documented as an
+alternative. It adds a header Fly ignores, so it is harmless; delete it if you want the client
+clean.
 
 The API is a single instance by necessity — SQLite cannot be scaled horizontally.
 
 To point the Playwright smoke tests at the deployment instead of localhost:
 
-```bash
-SMOKE_BASE=https://<app>.vercel.app node smoke.mjs
+```powershell
+$env:SMOKE_BASE = "https://<app>.vercel.app"
+node smoke.mjs
 ```
 
 ---

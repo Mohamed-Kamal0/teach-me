@@ -1,170 +1,200 @@
-# Deploying this project, free
+# Deploying this project
 
 A step-by-step runbook. Follow it top to bottom; every value you need to type is written out.
 
-The end state is two free services:
+**Commands are PowerShell**, since that is what this project is developed on. Two Windows-specific
+details are worth knowing before you start, because both fail quietly rather than loudly:
+
+- `curl` in PowerShell is an alias for `Invoke-WebRequest`, which does not understand curl's flags.
+  Every `curl.exe` below is spelled out deliberately — that is the real curl, shipped with Windows.
+- Windows PowerShell 5.1 has no `&&` operator; it is a parse error. Commands that must run in
+  sequence are separated with `;` or put on their own lines.
 
 ```
-Browser ──► https://<your-app>.vercel.app          Angular SPA (Vercel Hobby)
+Browser ──► https://<your-app>.vercel.app             Angular SPA (Vercel Hobby, free)
                  │  /api/*  rewritten, so the browser sees one origin
-                 └──────────► https://<service>-<id>.us-central1.run.app   .NET API (Cloud Run)
-                                    └─ SQLite, re-seeded with demo data on every start
+                 └──────────► https://teaching-learning-platform.fly.dev   .NET API (Fly.io)
+                                    └─ SQLite on a Fly volume — data persists
 ```
 
-**Why Cloud Run.** The API is .NET 10, too new for buildpack-style hosts, so it has to ship as a
-Docker image. Cloud Run builds one straight from the repo, scales to zero when nobody is using it,
-and its always-free monthly allowance is far larger than this project will ever consume. Cold
-starts are a few seconds rather than the ~50 seconds typical of free tiers that suspend containers.
+**Read this before you start: Fly.io is not free.** Fly ended free allowances for new accounts in
+October 2024. New signups get a short trial (2 VM-hours or 7 days, whichever runs out first), after
+which a card is required. Realistic cost for this project, with the machine set to stop when idle:
 
-**One thing to know up front:** Cloud Run needs a Google Cloud **billing account with a payment
-method**, even to use the free tier. Having a card on file is not the same as being charged — the
-steps below stay inside the always-free allowance, and Step 7 sets a budget alarm so you find out
-immediately if that ever stops being true. If you would rather not attach a card at all, see the
-appendix; `render.yaml` is kept in the repo as a no-card fallback.
+| Item | Cost |
+| :--- | :--- |
+| `shared-cpu-1x` / 512 MB machine, always on | ~$3/month |
+| the same machine with `auto_stop_machines` (this config) | cents per month for demo use — you pay only while it runs |
+| 1 GB volume | $0.15/month, billed even while the machine is stopped |
+
+So: roughly **$0.15–$3 a month** depending on traffic. Small, not zero. If zero is the requirement,
+the appendix has genuinely free options.
+
+**What you get for it, that no free tier could give:** a real volume. The database is a persistent
+file, so data entered during a demo is still there next week. Every free option in the appendix has
+an ephemeral filesystem, which for a SQLite app means the database resets on every restart.
 
 You need a **GitHub account** (the repo is already at
-`https://github.com/Mohamed-Kamal0/teaching-learning-platform`), a
-[Google Cloud](https://console.cloud.google.com) account, and a [Vercel](https://vercel.com)
-account.
+`https://github.com/Mohamed-Kamal0/teaching-learning-platform`), a [Fly.io](https://fly.io) account
+with a card on file, and a free [Vercel](https://vercel.com) account.
 
-Total time: about 25 minutes, most of it waiting for the first build.
-
----
-
-## Step 1 — Push the deployment files
-
-```bash
-git add -A
-git commit -m "Deploy to Cloud Run and Vercel"
-git push origin main
-```
-
-If `git push` is rejected because the remote has moved on, run `git pull --rebase origin main`
-first, then push again.
+Total time: about 20 minutes.
 
 ---
 
-## Step 2 — Set up Google Cloud
+## Step 1 — Install flyctl and sign in
 
-1. Install the [gcloud CLI](https://cloud.google.com/sdk/docs/install) and sign in:
+**On Windows** — in PowerShell, not Git Bash:
 
-   ```bash
-   gcloud auth login
-   ```
+```powershell
+winget install Fly.Flyctl
+```
 
-2. Create a project and make it the default. The project ID must be globally unique, so put
-   something of your own on the end:
+or, if you do not have winget:
 
-   ```bash
-   gcloud projects create teaching-learning-<something-unique>
-   gcloud config set project teaching-learning-<something-unique>
-   ```
+```powershell
+pwsh -Command "iwr https://fly.io/install.ps1 -useb | iex"
+```
 
-3. **Link a billing account.** In the [console](https://console.cloud.google.com/billing), attach
-   your project to a billing account (create one if this is your first project — new accounts also
-   get $300 of trial credit). Nothing deploys without this.
+> **Do not run the Linux installer below in Git Bash.** It detects the platform with `uname`, which
+> reports `MINGW64_NT-…` under Git Bash. That is not a target it publishes builds for, so it
+> requests a release asset that does not exist and prints Fly's HTML 404 page —
+> *"The page you were looking for doesn't exist"* — rather than a useful error. The URL is fine; the
+> platform is wrong.
 
-4. Enable the three APIs the build needs:
+<details>
+<summary>macOS / Linux</summary>
 
-   ```bash
-   gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
-   ```
+```bash
+brew install flyctl                      # macOS
+curl -L https://fly.io/install.sh | sh   # either
+```
+
+</details>
+
+**Then open a new PowerShell window.** The installer adds `%USERPROFILE%\.fly\bin` to your user
+PATH, but already-open terminals keep the environment they started with — so `fly` stays unknown in
+the window you installed from, however many times you reinstall.
+
+```powershell
+fly version
+fly auth signup     # or: fly auth login
+```
+
+> **If the installer fails with `Remove-Item : ... flyctl.exe: Access to the path is denied`:**
+> flyctl is already installed and its background agent is holding the binary open, so the archive
+> cannot overwrite it. This is not a failed install — check with
+> `& "$env:USERPROFILE\.fly\bin\flyctl.exe" version`. If that answers, you are done; skip to Step 2.
+> To genuinely reinstall or upgrade, stop the agent first with `fly agent stop`, or
+> `Stop-Process -Name flyctl -Force`.
+
+Add a payment method when prompted — nothing deploys without one.
 
 ---
 
-## Step 3 — Deploy the API
+## Step 2 — Create the app
 
-From the repository root:
+From the repository root. **Do not let it generate a config** — [`fly.toml`](fly.toml) is already
+written and `fly launch` would overwrite it:
 
-```bash
-gcloud run deploy teaching-learning-api \
-  --source . \
-  --region us-central1 \
-  --port 8080 \
-  --memory 512Mi \
-  --max-instances 1 \
-  --allow-unauthenticated \
-  --set-env-vars ASPNETCORE_ENVIRONMENT=Production \
-  --set-env-vars "ConnectionStrings__AppDb=Data Source=/app/data/teacherslessons.db" \
-  --set-env-vars Seed__AdminEmail=admin@teacherslessons.test \
-  --set-env-vars Seed__AdminPassword=CHOOSE-A-PASSWORD \
-  --set-env-vars Seed__Demo=true
+```powershell
+fly launch --no-deploy --copy-config --name teaching-learning-platform --region ams
 ```
 
-Replace `CHOOSE-A-PASSWORD` with a password of your own and **write it down** — it is how you log in
-as administrator.
+If the name is taken (they are globally unique across Fly), pick another and change **both**:
+`app` in [`fly.toml`](fly.toml), and the URL in [`client/web/vercel.json`](client/web/vercel.json).
 
-Four flags matter more than they look:
+Pick a region near you if `ams` (Amsterdam) is not. `fly platform regions` lists them.
 
-| Flag | Why |
-| :--- | :--- |
-| `--source .` | Cloud Build finds the `Dockerfile` at the repo root and builds it. This only works from the root — the Dockerfile was moved there for exactly this reason. |
-| `--region us-central1` | The free tier's egress allowance covers North America, and `us-central1` is inside every published reading of the free-tier region rules. Deploying elsewhere may cost money. |
-| **`--max-instances 1`** | **Do not change this.** Cloud Run's filesystem is per-instance and in-memory, so two instances would mean two different databases serving the same site. It also caps runaway spend. |
-| `--allow-unauthenticated` | Makes it a public website rather than an IAM-guarded internal service. |
+---
 
-The double underscores in the env vars are not a typo — that is how .NET maps a flat environment
-variable onto a nested config key. A single underscore silently does nothing, the app cannot find
-its admin credentials, and it throws at startup.
+## Step 3 — Create the volume
 
-The first deploy takes **5–10 minutes**: it uploads the source, builds the .NET 10 image in Cloud
-Build, pushes it to Artifact Registry and starts it. Answer `y` if it offers to create the
-Artifact Registry repository.
+This is what makes the data persist:
 
-When it finishes, gcloud prints your service URL:
-
-```
-Service URL: https://teaching-learning-api-XXXXXXXX.us-central1.run.app
+```powershell
+fly volumes create sqlite_data --size 1 --region ams
 ```
 
-**Copy it — you need it in the next step.** Check it answers:
+The region **must** match `primary_region` in `fly.toml`, or the machine will have nothing to mount.
+1 GB is the smallest and is vastly more than this database needs.
 
-```bash
-curl https://teaching-learning-api-XXXXXXXX.us-central1.run.app/api/health
+> **One volume means one machine.** A Fly volume attaches to a single machine, and two machines
+> would mean two divergent databases behind one URL. Never `fly scale count` above 1.
+
+---
+
+## Step 4 — Set the admin password
+
+It is a secret, so it is not in `fly.toml`:
+
+```powershell
+fly secrets set Seed__AdminPassword=CHOOSE-A-PASSWORD
+```
+
+If your password contains characters PowerShell treats specially — `$`, backtick, spaces — quote the
+whole argument with single quotes: `fly secrets set 'Seed__AdminPassword=my $ecret'`.
+
+**Write it down** — with `admin@teacherslessons.test` it is how you log in as administrator.
+
+The double underscore is not a typo: that is how .NET maps a flat environment variable onto the
+nested `Seed:AdminPassword` config key. A single underscore silently does nothing and the app
+fail-fasts at startup.
+
+---
+
+## Step 5 — Deploy
+
+```powershell
+fly deploy
+```
+
+The first build takes **5–10 minutes** — it ships the repo to a Fly builder, builds the .NET 10
+image from the root [`Dockerfile`](Dockerfile), and boots a machine. Watch for:
+
+```
+Applying migration '20260825132057_InitialCreate'.
+Now listening on: http://[::]:8080
+```
+
+Check it:
+
+```powershell
+curl.exe https://teaching-learning-platform.fly.dev/api/health
 # {"status":"ok","db":"ok"}
 ```
 
-If you would rather see the logs:
-
-```bash
-gcloud run services logs read teaching-learning-api --region us-central1 --limit 50
-```
-
-You are looking for `Applying migration '20260825132057_InitialCreate'`, then
-`Seed:Demo is set — the database was dropped and re-seeded with demo data.`
-
-> **Prefer clicking?** [console.cloud.google.com/run](https://console.cloud.google.com/run) →
-> **Deploy container** → **Continuously deploy from a repository** → connect GitHub → pick the repo
-> → Build type **Dockerfile**, location `/Dockerfile` → then set the same region, port, memory,
-> max-instances, authentication and environment variables in *Container, Networking, Security*.
-> This also gives you automatic redeploys on every push, which the CLI route does not.
+At this point the database is **empty except for the administrator** — migrations ran, but no demo
+data. That is next.
 
 ---
 
-## Step 4 — Point the client at your API URL
+## Step 6 — Seed the demo data, once
 
-This step is **not optional** — the committed value is a placeholder, because a Cloud Run URL
-contains a generated project identifier and cannot be known in advance.
+Because the volume persists, seeding is a one-time operation rather than something that happens on
+every boot. Turn the flag on, let it boot, then turn it off:
 
-Edit [`client/web/vercel.json`](client/web/vercel.json) and replace the host in `destination` with
-the URL from Step 3:
-
-```json
-{
-  "source": "/api/:path*",
-  "destination": "https://teaching-learning-api-XXXXXXXX.us-central1.run.app/api/:path*"
-}
+```powershell
+fly secrets set Seed__Demo=true     # triggers a restart; the app seeds during startup
+fly logs                            # wait for: "the database was dropped and re-seeded with demo data"
+                                    # then Ctrl+C to stop tailing
+fly secrets unset Seed__Demo        # triggers another restart; from here the data is left alone
 ```
 
-Keep the `/api/:path*` suffix. Then:
+**Do not leave `Seed__Demo` set.** It drops and re-seeds the database on *every* start, which is
+correct for a host with no disk and actively destructive here — it would throw away real data at
+every restart and redeploy.
 
-```bash
-git add -A && git commit -m "Point client at the API" && git push origin main
+Confirm the data landed:
+
+```powershell
+curl.exe https://teaching-learning-platform.fly.dev/api/public/home
+# {"approvedTeacherCount":2,"lessonCount":8,...}
 ```
 
 ---
 
-## Step 5 — Deploy the client to Vercel
+## Step 7 — Deploy the client to Vercel
 
 1. Go to [vercel.com/new](https://vercel.com/new).
 2. Import **`teaching-learning-platform`** from GitHub.
@@ -178,89 +208,77 @@ git add -A && git commit -m "Point client at the API" && git push origin main
    | Output Directory | leave default (`vercel.json` pins it) |
    | Environment Variables | none needed |
 
-4. **Deploy.** This one is quick — a minute or two.
+4. **Deploy.** A minute or two.
 
-Open the URL Vercel gives you. The home page should show live counts read from the database:
-**2 approved teachers, 8 lessons published**. If you see those numbers, the whole chain is working
-— Vercel served the app, rewrote `/api/public/home` to Cloud Run, and Cloud Run answered from the
-seeded database.
+`vercel.json` already points `/api` at `https://teaching-learning-platform.fly.dev` — no edit needed
+unless you changed the app name in Step 2.
+
+Open the URL Vercel gives you. The home page should show live counts from the database: **2 approved
+teachers, 8 lessons published**.
 
 ---
 
-## Step 6 — Tell the API its public origin
+## Step 8 — Tell the API its public origin
 
-```bash
-gcloud run services update teaching-learning-api \
-  --region us-central1 \
-  --update-env-vars Cors__AllowedOrigin=https://your-actual-app.vercel.app
+Put your real Vercel URL into the `Cors__AllowedOrigin` placeholder in [`fly.toml`](fly.toml), then:
+
+```powershell
+fly deploy
+git add -A
+git commit -m "Set production CORS origin"
+git push origin main
 ```
 
 Not strictly required — the Vercel rewrite keeps every request same-origin, so CORS is never
-exercised — but leaving it wrong is a trap for anyone who later calls the API directly from a
-browser.
+exercised — but leaving the placeholder is a trap for anyone who later calls the API directly.
 
 ---
 
-## Step 7 — Set a budget alarm
+## Verify
 
-Do this once. It is the difference between "free" and "free as far as I know".
-
-1. [console.cloud.google.com/billing](https://console.cloud.google.com/billing) → **Budgets &
-   alerts** → **Create budget**.
-2. Scope it to your project, set the amount to **$1**, and tick alerts at 50% / 90% / 100%.
-
-You should never hear from it. If you do, something is misconfigured — most likely
-`--max-instances` was raised, or the service was deployed outside `us-central1`.
-
-**What the free allowance actually is,** per month, per billing account: 2 million requests,
-180,000 vCPU-seconds, 360,000 GiB-seconds of memory, and 1 GB of egress from North America. With
-request-based billing you are charged only while a request is in flight, so an idle service costs
-nothing.
-
-**Do not set `--min-instances 1`.** It is the obvious-looking way to avoid cold starts, and it
-would bill an idle instance around the clock — roughly 2.6 million instance-seconds a month against
-a 180,000 vCPU-second allowance. Cold starts here are a few seconds; that is the right trade.
-
-Because cold starts are quick, you do **not** need an uptime pinger for this deployment. If you
-want the first visit of the day to be instant anyway, a free cron
-([cron-job.org](https://cron-job.org)) hitting `/api/health` every 5 minutes stays comfortably
-inside the allowance — roughly 20,000 vCPU-seconds a month at a couple of seconds per ping.
-
----
-
-## Verify the deployment
-
-Work through these against your Vercel URL. All demo accounts use the password **`Demo1234`**.
+All demo accounts use the password **`Demo1234`**.
 
 | # | Check | Expected |
 | :--- | :--- | :--- |
-| 1 | `curl https://<api>.run.app/api/health` | `{"status":"ok","db":"ok"}` |
-| 2 | Open the site signed out | Home page shows 2 approved teachers, 8 lessons |
+| 1 | `curl.exe https://teaching-learning-platform.fly.dev/api/health` | `{"status":"ok","db":"ok"}` |
+| 2 | Open the Vercel site signed out | Home page shows 2 approved teachers, 8 lessons |
 | 3 | Log in as `teacher.approved@demo.test` | Lands on the teacher area, not back on `/login` |
 | 4 | Log in as `student.one@demo.test`, open a course | Lesson list renders; the third lesson's quiz is not yet available |
-| 5 | Log in as your administrator (`admin@teacherslessons.test` + the password from Step 3) | Approvals screen lists a pending teacher |
+| 5 | Log in as your administrator (`admin@teacherslessons.test`) | Approvals screen lists a pending teacher |
+| 6 | Add a lesson, `fly apps restart teaching-learning-platform`, reload | **The lesson is still there** — proves the volume is doing its job |
 
-Check 3 is the important one. A successful login proves the entire chain: Vercel's rewrite reached
-Cloud Run, `UseForwardedHeaders` made the request look like HTTPS, and the browser accepted the
-`Secure` auth cookie as same-origin.
+Check 3 is the important one. A successful login proves the whole chain: Vercel's rewrite reached
+Fly, `UseForwardedHeaders` made the request look like HTTPS behind Fly's edge TLS, and the browser
+accepted the `Secure` auth cookie as same-origin.
 
-You can also run the full browser smoke test against production:
+Check 6 is the one worth actually doing — it is the difference between this deployment and every
+free alternative.
 
-```bash
+Full browser smoke test against the live site:
+
+```powershell
 cd client/web
 npm ci
-SMOKE_BASE=https://your-app.vercel.app node smoke.mjs
+$env:SMOKE_BASE = "https://your-app.vercel.app"
+node smoke.mjs
 ```
+
+`$env:VAR = "..."` is how PowerShell sets an environment variable — the `VAR=value command` prefix
+form from bash does not exist here, and would be read as a command name.
 
 ---
 
-## Redeploying
+## Day-to-day
 
-The CLI route does not watch GitHub. After changing server code, run the Step 3 command again —
-gcloud reuses everything, so it is one command and a few minutes. Environment variables already set
-are preserved across deploys.
-
-Vercel *does* watch GitHub: pushing to `main` redeploys the client automatically.
+| Task | Command |
+| :--- | :--- |
+| Deploy API changes | `fly deploy` |
+| Deploy client changes | `git push` — Vercel rebuilds automatically |
+| Watch logs | `fly logs` |
+| Shell into the machine | `fly ssh console` |
+| Check status and cost drivers | `fly status`, `fly scale show` |
+| Re-seed from scratch | Step 6 again |
+| Stop paying | `fly apps destroy teaching-learning-platform` and `fly volumes destroy` — the volume bills even while stopped |
 
 ---
 
@@ -268,55 +286,85 @@ Vercel *does* watch GitHub: pushing to `main` redeploys the client automatically
 
 | Symptom | Cause | Fix |
 | :--- | :--- | :--- |
-| Vercel build succeeds but the site is a blank page or 404 | Root Directory not set to `client/web` | Vercel → Settings → General → Root Directory → `client/web` → redeploy |
-| Site loads but every API call fails | `vercel.json` still has the placeholder URL | Step 4 — put your real Cloud Run URL in, commit, push |
-| Login appears to work but you bounce back to `/login` | The auth cookie was rejected — usually CORS was used instead of the rewrite | Confirm `vercel.json` still has the `/api/:path*` rewrite |
-| `gcloud run deploy` builds with buildpacks instead of the Dockerfile | Run from a subdirectory | Run it from the repository root, where `Dockerfile` lives |
-| Build fails: `COPY server/... not found` | The Dockerfile was moved but the build context is wrong | `--source .` from the repo root is the only supported invocation |
-| Deploy fails: *the user-provided container failed to start and listen on the port* | The app threw at startup — almost always a missing or misspelled env var | `gcloud run services logs read ...`; confirm the **double** underscores |
-| Home page shows 0 teachers, 0 lessons | `Seed__Demo` is not `true` | `gcloud run services update teaching-learning-api --region us-central1 --update-env-vars Seed__Demo=true` |
-| Data seems to change at random between page loads | More than one instance is running | `--max-instances 1`. Each instance has its own in-memory database. |
-| Billing alert fires | Almost always max-instances or the wrong region | Check both; `gcloud run services describe teaching-learning-api --region us-central1` |
+| The installer prints *"The page you were looking for doesn't exist"* | The Linux installer was run on Windows (usually in Git Bash) — `uname` reports `MINGW64_NT-…`, so it fetches a release asset that does not exist | Use `winget install Fly.Flyctl` from PowerShell (Step 1) |
+| `fly` is not recognised right after installing | The installer put `%USERPROFILE%\.fly\bin` on the user PATH, but open terminals keep the environment they launched with | Open a **new** PowerShell window. Reinstalling does not help and is not needed |
+| Installer fails: `Remove-Item : ... flyctl.exe: Access to the path is denied` | flyctl is already installed and its background agent holds the binary locked | Nothing is wrong — verify with `& "$env:USERPROFILE\.fly\bin\flyctl.exe" version`. To force an upgrade, `fly agent stop` first |
+| Deploy fails: *volume not found* / machine won't start | Volume missing, or in a different region from `primary_region` | `fly volumes list`; recreate in the right region (Step 3) |
+| App exits: *Missing required secrets Seed:AdminEmail / Seed:AdminPassword* | The secret was never set, or has a single underscore | `fly secrets list`; re-run Step 4 |
+| Home page shows 0 teachers, 0 lessons | Demo data never seeded | Step 6 |
+| Data resets on every deploy | `Seed__Demo` is still set | `fly secrets unset Seed__Demo` |
+| Data appears to change at random between page loads | More than one machine is running | `fly scale count 1` |
+| Vercel build succeeds but the site is blank or 404 | Root Directory not set to `client/web` | Vercel → Settings → General → Root Directory |
+| Site loads but every API call fails | App name in `vercel.json` doesn't match `fly.toml` | Make them agree |
+| Login appears to work but you bounce back to `/login` | The auth cookie was rejected | Confirm `vercel.json` still has the `/api/:path*` rewrite — it is what makes the request same-origin |
+| Bill larger than expected | The machine is not stopping when idle | `fly status`; confirm `auto_stop_machines` and `min_machines_running = 0` in `fly.toml`, then `fly deploy` |
 
 ---
 
-## Things to know about this deployment
+## Notes on this deployment
 
-**Data does not survive a restart.** Cloud Run's filesystem is in-memory and per-instance, so the
-SQLite file vanishes whenever the instance is recycled — which, with scale-to-zero, is whenever the
-site goes quiet. `Seed__Demo=true` turns that into a feature: every cold start drops the database
-and re-seeds the known demo dataset, so the public link is always populated and always shows the
-same, correct data. The trade-off is that anything a visitor types — a new lesson, a mark, a
-registration — is gone at the next restart. That is the right behaviour for a demo and the wrong
-behaviour for anything else.
+**The reverse-proxy handling matters here.** Fly terminates TLS at its edge and forwards to the
+container over plain HTTP, so without `UseForwardedHeaders` (already in `Program.cs`)
+`Request.Scheme` would always be `http`: `UseHttpsRedirection` would loop every request through a
+redirect, and the auth cookie's `CookieSecurePolicy.Always` would silently refuse to set the cookie
+at all. This is configured — the note is here so nobody "simplifies" it away.
 
-The database also counts against the container's memory, since the filesystem *is* memory. The
-seeded dataset is a few hundred kilobytes against a 512 MiB limit, so this is a non-issue here —
-but it is why the app should never accumulate real data on this deployment.
+**One machine, by necessity.** SQLite on a single volume cannot be scaled horizontally.
 
-**If you ever want real persistence,** unset `Seed__Demo` and move the database off SQLite. Neon
-Postgres has a permanently free tier; the work is swapping the EF Core provider to
-`Npgsql.EntityFrameworkCore.PostgreSQL`, regenerating the migration, and making the SQLite-specific
-converters in `server/TeachersLessons.Api/Data/DateTimeOffsetConverters.cs` conditional — Postgres
-handles `DateTimeOffset` natively, and the lesson-timing comparisons depend on that conversion.
-
-**Where each secret lives.** `Seed__AdminPassword` is passed on the deploy command line and stored
-as a Cloud Run environment variable — never in the repo. For something stricter, put it in
-[Secret Manager](https://cloud.google.com/secret-manager) and swap the flag for
-`--set-secrets Seed__AdminPassword=admin-password:latest`; Secret Manager's free tier covers this.
+**A leftover from the ngrok setup:** `core/interceptors/ngrok.interceptor.ts` adds an
+`ngrok-skip-browser-warning` header to every request. It is ignored by Fly and harmless, so it is
+left in place — remove it if you want the client clean.
 
 ---
 
-## Appendix — Render, if you would rather not attach a card
+## Appendix — free alternatives
 
-[`render.yaml`](render.yaml) is a working Render Blueprint for the same API. Render's free web
-service does not require a payment method, which is the one thing Cloud Run cannot offer.
+All three cost nothing; all three give up something Fly provides.
 
-Render dashboard → **New +** → **Blueprint** → pick the repo → it reads `render.yaml` and prompts
-for `Seed__AdminPassword`. Everything else — the Vercel side, the verification table, the
-troubleshooting notes — is unchanged, except:
+**ngrok tunnel** — the API runs on your own machine, published through a tunnel. No card, and data
+persists on your real disk. But the site is only up while your machine is on with the API and tunnel
+running. Claim a static domain at [dashboard.ngrok.com](https://dashboard.ngrok.com) → **Domains** →
+**Create Domain** (passing a domain you have not claimed gives `ERR_NGROK_313`), then:
 
-- Render sleeps after **15 minutes** idle with a ~50 second cold start, which is longer than
-  Vercel's proxy will wait. A pinger every 10 minutes is required rather than optional.
-- Free compute is metered at 750 hours/month; a 31-day month is 744, so keeping it awake
-  continuously only fits if it is the only free service in your account.
+```powershell
+ngrok http 5099 --url=https://YOUR-DOMAIN.ngrok-free.app
+```
+
+Run the API in a second terminal, in Production, passing the secrets as environment variables —
+.NET only reads user-secrets in Development:
+
+```powershell
+cd server/TeachersLessons.Api
+$env:ASPNETCORE_ENVIRONMENT = "Production"
+$env:Seed__AdminEmail = "admin@teacherslessons.test"
+$env:Seed__AdminPassword = "YOUR-ADMIN-PASSWORD"
+dotnet run --urls http://localhost:5099
+```
+
+The
+`ngrok.interceptor.ts` mentioned above exists for this setup: ngrok's free tier otherwise answers
+browser-looking traffic with an interstitial page instead of forwarding it.
+
+**Render** — [`render.yaml`](render.yaml) is a working Blueprint, no card required. Sleeps after 15
+minutes idle with a ~50 second cold start, so it needs a pinger every 10 minutes; free compute is
+metered at 750 hours/month against 744 in a long month.
+
+**Google Cloud Run** — builds from the root [`Dockerfile`](Dockerfile); fast cold starts and a large
+free allowance, but needs a billing account with a card even to stay free:
+
+```powershell
+gcloud run deploy teaching-learning-api --source . `
+  --region us-central1 --port 8080 --memory 512Mi --max-instances 1 --allow-unauthenticated `
+  --set-env-vars ASPNETCORE_ENVIRONMENT=Production `
+  --set-env-vars "ConnectionStrings__AppDb=Data Source=/app/data/teacherslessons.db" `
+  --set-env-vars Seed__AdminEmail=admin@teacherslessons.test `
+  --set-env-vars Seed__AdminPassword=CHOOSE-A-PASSWORD `
+  --set-env-vars Seed__Demo=true
+```
+
+The line continuation character is a **backtick**, not a backslash — and nothing may follow it on
+the line, not even a space.
+
+For Render and Cloud Run, `Seed__Demo=true` is **required**, not optional — with no persistent disk
+the database is empty on every boot, and the flag is what keeps the demo populated. That is exactly
+the flag you must *not* set on Fly.
