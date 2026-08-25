@@ -1,0 +1,14 @@
+# Build output
+bin/
+obj/
+dist/
+node_modules/
+
+# Local database — recreated by `dotnet ef database update` + `dotnet run -- seed --demo`
+*.db
+*.db-shm
+*.db-wal
+
+# Local dev
+.vscode/
+*.user
