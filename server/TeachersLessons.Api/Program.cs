@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Serilog;
@@ -95,6 +96,18 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.SameSite = SameSiteMode.Lax;
 });
 
+// Fly.io (and most hosts) terminate TLS at the edge and forward to the container over plain
+// HTTP, so without this, Request.Scheme is always "http": UseHttpsRedirection loops every
+// request through a redirect, and the auth cookie's CookieSecurePolicy.Always silently refuses
+// to set the cookie at all. KnownNetworks/KnownProxies are cleared because the edge proxy's IP
+// isn't a fixed, known address.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 var allowedOrigin = builder.Configuration["Cors:AllowedOrigin"] ?? "http://localhost:4200";
 builder.Services.AddCors(options =>
 {
@@ -157,6 +170,7 @@ if (!app.Environment.IsEnvironment("Testing"))
 
 // ---- Pipeline ---------------------------------------------------------------
 
+app.UseForwardedHeaders();
 app.UseSerilogRequestLogging();
 app.UseMiddleware<ApiExceptionMiddleware>();
 

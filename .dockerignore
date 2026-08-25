@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/.angular/
+**/*.db
+**/*.db-shm
+**/*.db-wal
+.git/
+.vscode/
+client/web/
+server/TeachersLessons.Api.Tests/

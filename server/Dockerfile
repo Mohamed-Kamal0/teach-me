@@ -1,9 +1,9 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY TeachersLessons.Api/TeachersLessons.Api.csproj TeachersLessons.Api/
-RUN dotnet restore TeachersLessons.Api/TeachersLessons.Api.csproj
-COPY . .
-WORKDIR /src/TeachersLessons.Api
+COPY server/TeachersLessons.Api/TeachersLessons.Api.csproj server/TeachersLessons.Api/
+RUN dotnet restore server/TeachersLessons.Api/TeachersLessons.Api.csproj
+COPY server/TeachersLessons.Api/ server/TeachersLessons.Api/
+WORKDIR /src/server/TeachersLessons.Api
 RUN dotnet publish TeachersLessons.Api.csproj -c Release -o /app/publish /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
