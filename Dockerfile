@@ -12,5 +12,8 @@ WORKDIR /app
 RUN mkdir -p /app/data
 EXPOSE 8080
 ENV ASPNETCORE_HTTP_PORTS=8080
+# Web projects default to Server GC, which sizes its heaps per core and is the wrong trade on a
+# free 512 MB instance. Workstation GC keeps the footprint well inside the limit.
+ENV DOTNET_gcServer=0
 COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "TeachersLessons.Api.dll"]

@@ -9,7 +9,7 @@ services:
     runtime: docker
     plan: free
     region: frankfurt
-    dockerfilePath: ./server/Dockerfile
+    dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /api/health
     envVars:

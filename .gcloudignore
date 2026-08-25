@@ -1,0 +1,30 @@
+# What NOT to upload to Cloud Build when running `gcloud run deploy --source .`.
+# Without this file gcloud falls back to .gitignore, which would still ship the Angular
+# client and the coursework documents to the builder for no reason.
+#
+# Note this governs the *upload*; .dockerignore still governs the image build itself.
+
+.git/
+.gitignore
+
+# The client is deployed separately on Vercel — the API image never needs it.
+client/
+
+# Build output and local databases
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/.angular/
+**/*.db
+**/*.db-shm
+**/*.db-wal
+
+# Tests are not part of the published image
+server/TeachersLessons.Api.Tests/
+
+# Coursework and planning documents
+*.md
+*.pdf
+.agents/
+skills-lock.json
