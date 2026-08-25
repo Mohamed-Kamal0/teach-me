@@ -151,10 +151,8 @@ if (!app.Environment.IsEnvironment("Testing"))
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     var clock = scope.ServiceProvider.GetRequiredService<TimeProvider>();
-    if ((await db.Database.GetAppliedMigrationsAsync()).Any())
-    {
-        await DbSeeder.SeedAdminAsync(db, adminEmail, adminPassword, clock);
-    }
+    await db.Database.MigrateAsync();
+    await DbSeeder.SeedAdminAsync(db, adminEmail, adminPassword, clock);
 }
 
 // ---- Pipeline ---------------------------------------------------------------
