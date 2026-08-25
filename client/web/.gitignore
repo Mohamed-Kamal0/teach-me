@@ -37,6 +37,9 @@ yarn-error.log
 testem.log
 /typings
 
+# Playwright smoke-test screenshots
+/smoke-shots
+
 # System files
 .DS_Store
 Thumbs.db

@@ -1,7 +1,9 @@
 import { chromium } from 'playwright';
 
-const BASE = 'http://localhost:4200';
-const SHOT = 'C:\\Users\\moham\\AppData\\Local\\Temp\\claude\\d--envnt-The-Project\\9fee2275-8f79-4e45-9b67-067bfc0b4729\\scratchpad\\shots';
+// SMOKE_BASE points the same script at the deployed site, e.g.
+//   SMOKE_BASE=https://<app>.vercel.app node smoke.mjs
+const BASE = process.env.SMOKE_BASE ?? 'http://localhost:4200';
+const SHOT = process.env.SMOKE_SHOTS ?? './smoke-shots';
 
 const results = [];
 function ok(name, detail = '') { results.push(`PASS  ${name}${detail ? ' — ' + detail : ''}`); }

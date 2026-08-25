@@ -8,6 +8,8 @@ RUN dotnet publish TeachersLessons.Api.csproj -c Release -o /app/publish /p:UseA
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
 WORKDIR /app
+# SQLite will create the .db file but not its parent directory.
+RUN mkdir -p /app/data
 EXPOSE 8080
 ENV ASPNETCORE_HTTP_PORTS=8080
 COPY --from=build /app/publish .

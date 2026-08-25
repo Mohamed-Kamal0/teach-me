@@ -1,0 +1,33 @@
+# Render Blueprint for the API. The Angular client is deployed separately on Vercel,
+# which rewrites /api/* to this service (see client/web/vercel.json).
+#
+# The free plan has no persistent disk, so the SQLite file lives on the container's
+# ephemeral filesystem and Seed__Demo=true re-seeds the demo dataset on every start.
+services:
+  - type: web
+    name: teaching-learning-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_HTTP_PORTS
+        value: "8080"
+      - key: ConnectionStrings__AppDb
+        value: Data Source=/app/data/teacherslessons.db
+      - key: Seed__AdminEmail
+        value: admin@teacherslessons.test
+      # Entered once in the Render dashboard on first deploy; never committed.
+      - key: Seed__AdminPassword
+        sync: false
+      # Destructive: drops and re-seeds the database on every container start.
+      - key: Seed__Demo
+        value: "true"
+      # Unused while the Vercel rewrite keeps requests same-origin, but kept correct
+      # so a direct browser call to the API is not silently blocked.
+      - key: Cors__AllowedOrigin
+        value: https://REPLACE-WITH-VERCEL-URL.vercel.app

@@ -1,8 +1,10 @@
 {
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist/web/browser",
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://teaching-learning-platform.fly.dev/api/:path*"
+      "destination": "https://teaching-learning-api.onrender.com/api/:path*"
     },
     {
       "source": "/(.*)",

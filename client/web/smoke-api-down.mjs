@@ -4,8 +4,8 @@
 //   2. The user reloads the page with the API already dead (cold boot, no auth state in memory).
 import { chromium } from 'playwright';
 
-const BASE = 'http://localhost:4200';
-const SHOT = process.env.SHOT_DIR;
+const BASE = process.env.SMOKE_BASE ?? 'http://localhost:4200';
+const SHOT = process.env.SMOKE_SHOTS ?? process.env.SHOT_DIR ?? './smoke-shots';
 
 const results = [];
 const browser = await chromium.launch();

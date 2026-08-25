@@ -164,8 +164,21 @@ if (!app.Environment.IsEnvironment("Testing"))
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     var clock = scope.ServiceProvider.GetRequiredService<TimeProvider>();
-    await db.Database.MigrateAsync();
-    await DbSeeder.SeedAdminAsync(db, adminEmail, adminPassword, clock);
+
+    // Free hosting gives no persistent disk, so the SQLite file is empty on every cold start.
+    // Seed:Demo=true rebuilds the known demo dataset each boot, which keeps the public demo
+    // populated. It is destructive by design (DemoSeeder calls EnsureDeletedAsync) — never set
+    // it on a deployment whose data is meant to survive.
+    if (builder.Configuration.GetValue<bool>("Seed:Demo"))
+    {
+        await DemoSeeder.RunAsync(db, adminEmail, adminPassword, clock);
+        app.Logger.LogWarning("Seed:Demo is set — the database was dropped and re-seeded with demo data.");
+    }
+    else
+    {
+        await db.Database.MigrateAsync();
+        await DbSeeder.SeedAdminAsync(db, adminEmail, adminPassword, clock);
+    }
 }
 
 // ---- Pipeline ---------------------------------------------------------------

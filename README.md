@@ -87,6 +87,55 @@ timing requirement demonstrable without touching the database by hand.
 
 ---
 
+## Deployment
+
+**[DEPLOY.md](DEPLOY.md) is the step-by-step runbook.** What follows is why it is built this way.
+
+Two free services, one behind the other:
+
+| Piece | Host | What it serves |
+| :--- | :--- | :--- |
+| Angular client | Vercel (Hobby) | the static SPA, plus a rewrite of `/api/*` |
+| .NET API | Render (free web service, Docker) | everything under `/api` |
+
+**Why a rewrite and not CORS.** Every API call in the client is a hardcoded relative path —
+there is no `environment.ts` and no API base URL. So the SPA has to be served from an origin
+that proxies `/api`, which `client/web/vercel.json` does. That also keeps every request
+same-origin, which matters because the `tls_auth` cookie is `SameSite=Lax` and a genuine
+cross-site XHR would drop it. Replacing the rewrite with CORS breaks login.
+
+**Vercel.** Import the repository, set **Root Directory to `client/web`**, framework Angular.
+`vercel.json` pins `outputDirectory` to `dist/web/browser` — Angular 18's `application` builder
+puts the browser bundle one level deeper than the preset expects, and getting this wrong serves
+a 404 shell. Update the rewrite `destination` if Render assigns a URL other than
+`teaching-learning-api.onrender.com`.
+
+**Render.** New → Blueprint; it reads `render.yaml`. Every variable is committed there except
+`Seed__AdminPassword`, which is marked `sync: false` and is entered once in the dashboard.
+After the first Vercel deploy, put the real Vercel URL into `Cors__AllowedOrigin`.
+
+**`Seed__Demo=true` wipes the database on every container start.** Render's free plan has no
+persistent disk, so the SQLite file is empty on each cold boot; this flag re-runs `DemoSeeder`
+so the public demo is always populated with the credentials above. The consequence is that
+anything a visitor types is gone at the next restart. Never set this flag on a deployment whose
+data is meant to survive — leave it unset and startup falls back to migrate + seed-admin only.
+
+**Keeping it awake.** A free Render service sleeps after 15 minutes idle and takes ~50 seconds
+to wake, which is longer than Vercel's proxy will wait — a cold visit errors rather than loading
+slowly. A free cron (cron-job.org, UptimeRobot) hitting `GET /api/health` every 10 minutes keeps
+it up. The free plan allows 750 instance-hours a month against 744 hours in a long month, so
+continuous uptime fits **only if this is the only free web service in the account**.
+
+The API is a single instance by necessity — SQLite cannot be scaled horizontally.
+
+To point the Playwright smoke tests at the deployment instead of localhost:
+
+```bash
+SMOKE_BASE=https://<app>.vercel.app node smoke.mjs
+```
+
+---
+
 ## Running the tests
 
 ```bash
@@ -175,3 +224,11 @@ echo back in `X-XSRF-TOKEN`. `Common/AntiforgeryMiddleware.cs` publishes the req
 separate, non-`httpOnly` cookie so Angular's built-in `withXsrfConfiguration` pairs correctly.
 Antiforgery tokens are also bound to the signed-in user, which is why the client calls `/api/me`
 straight after login — that call reissues a token valid for the new principal.
+
+That middleware only issues a token when the request can actually carry a `Secure` cookie.
+`GetAndStoreTokens` throws rather than degrading when the cookie policy is `Always` and the
+request arrived over plain HTTP, which would turn every such request into a 500. Browser traffic
+is never affected — the hosting edge sets `X-Forwarded-Proto` and `UseForwardedHeaders` makes the
+request look like https. What does arrive over plain HTTP is the platform's health probe, which
+needs no CSRF token; without the guard it would 500 and fail the deploy. Unsafe requests lose
+nothing: with no token issued they fail validation and get the usual 400.
