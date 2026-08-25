@@ -1,0 +1,106 @@
+// The educational theme (plan §8): a classroom, not a dashboard — calm, bookish, legible at the
+// back of a room. Angular Material's M3 engine only ships pre-built tonal palettes, so structural
+// components (buttons, dialogs, form fields) use the closest one (violet, near our indigo primary)
+// while the semantic tokens below carry the plan's own measured-contrast hexes directly.
+@use '@angular/material' as mat;
+
+@include mat.core();
+
+$web-theme: mat.define-theme((
+  color: (
+    theme-type: light,
+    primary: mat.$azure-palette,
+    tertiary: mat.$orange-palette,
+  ),
+  density: (
+    scale: 0,
+  ),
+  typography: (
+    brand-family: 'Lora',
+    plain-family: 'Inter',
+  )
+));
+
+// ---- Semantic design tokens (plan §8 palette table) ------------------------
+// Every ratio below is measured against --surface (#FAF8F4); "text-safe" tokens are >= 4.5:1.
+:root {
+  --surface: #FAF8F4;          // page background — paper, not screen-grey
+  --primary: #31456A;          // 9.0:1 on surface — app bar, primary actions, links
+  --danger: #9B3226;           // 6.9:1 — failed · refused · turned away
+  --success: #2E6B4F;          // 5.9:1 — passed · lesson open
+  --muted: #6B7280;            // 4.6:1 — drafts, empty states
+  --warning-text: #7A4E10;     // 6.8:1 — pending approval · quiz not open yet (the word)
+  --tertiary-text: #8A5A12;    // 5.6:1 — what's-new counts, joining code (the word)
+  --tertiary: #C9852A;         // 2.9:1 — badge/rule FILL ONLY, never text on paper
+  --warning: #B4741A;          // 3.6:1 — chip/border FILL ONLY, never a sentence
+  --ink: #1F2937;              // on top of --tertiary / --warning fills (4.8:1+)
+  --border: #E4DFD5;
+}
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: 'Inter', "Helvetica Neue", sans-serif;
+  font-size: 14px;
+}
+
+h1, h2, h3, h4, .app-heading {
+  font-family: 'Lora', serif;
+  font-weight: 600;
+}
+
+table, .tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.state-empty, .state-error {
+  color: var(--muted);
+}
+
+.text-danger { color: var(--danger); }
+.text-success { color: var(--success); }
+.text-warning { color: var(--warning-text); }
+.text-tertiary { color: var(--tertiary-text); }
+.text-muted { color: var(--muted); }
+
+.chip-fill-tertiary {
+  background: var(--tertiary);
+  color: var(--ink);
+}
+.chip-fill-warning {
+  background: var(--warning);
+  color: var(--ink);
+}
+
+:root {
+  @include mat.all-component-themes($web-theme);
+}
+
+// M3's generated tonal palettes can't express the plan's exact measured-contrast hexes, so the
+// surfaces that carry the app's identity are pinned to the tokens above after theming.
+.mat-mdc-unelevated-button.mat-primary,
+.mat-mdc-raised-button.mat-primary,
+.mat-mdc-fab.mat-primary {
+  --mdc-filled-button-container-color: var(--primary);
+  --mdc-filled-button-label-text-color: #fff;
+  --mdc-fab-container-color: var(--primary);
+  background-color: var(--primary);
+  color: #fff;
+}
+
+.mat-mdc-button.mat-primary,
+.mat-mdc-outlined-button.mat-primary {
+  --mdc-text-button-label-text-color: var(--primary);
+  --mdc-outlined-button-label-text-color: var(--primary);
+  color: var(--primary);
+}
+
+a { color: var(--primary); }
+
+.mat-mdc-card {
+  background: #fff;
+  border: 1px solid var(--border);
+}

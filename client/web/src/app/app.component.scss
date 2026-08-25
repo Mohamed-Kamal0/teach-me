@@ -1,0 +1,48 @@
+.app-bar {
+  background: var(--primary);
+  color: white;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: white;
+  text-decoration: none;
+
+  span {
+    font-size: 1.1rem;
+    color: white;
+  }
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.role-chip {
+  padding: 0.2rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-right: 0.5rem;
+  background: rgba(255, 255, 255, 0.15);
+}
+.chip-admin { background: #64748B; color: white; }
+.chip-teacher { background: #EEF2FF; color: var(--primary); }
+.chip-student { background: #CCFBF1; color: #0F766E; }
+
+.menu-email {
+  padding: 0.5rem 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.app-content {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}

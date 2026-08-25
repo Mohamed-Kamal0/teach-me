@@ -1,0 +1,58 @@
+<mat-toolbar class="app-bar">
+  <a routerLink="/" class="brand">
+    <mat-icon>school</mat-icon>
+    <span class="app-heading">Teachers, Lessons and Students</span>
+  </a>
+
+  <span class="spacer"></span>
+
+  @if (auth.bootstrapped()) {
+    @if (auth.isAuthenticated()) {
+      <span class="role-chip" [class]="roleChipClass()">{{ auth.role() }}</span>
+
+      @switch (auth.role()) {
+        @case ('Admin') {
+          <a mat-button routerLink="/admin/approvals">Approvals</a>
+        }
+        @case ('Teacher') {
+          <a mat-button routerLink="/teacher/standing">Standing</a>
+          @if (auth.me()?.teacherStatus === 'Approved') {
+            <a mat-button routerLink="/teacher/lessons">Lessons</a>
+            <a mat-button routerLink="/teacher/students">Students</a>
+            <a mat-button routerLink="/teacher/progress">Progress</a>
+          }
+        }
+        @case ('Student') {
+          <a mat-button routerLink="/student/courses">Courses</a>
+          <a mat-button routerLink="/student/join">Join</a>
+          <a mat-button routerLink="/student/whats-new">What's New</a>
+          <a mat-button routerLink="/student/marks">Marks</a>
+          <a mat-button routerLink="/student/profile">Profile</a>
+        }
+      }
+
+      <button mat-icon-button [matMenuTriggerFor]="menu" aria-label="Account menu">
+        <mat-icon>account_circle</mat-icon>
+      </button>
+      <mat-menu #menu="matMenu">
+        <div class="menu-email">{{ auth.me()?.email }}</div>
+        <button mat-menu-item (click)="signOut()">
+          <mat-icon>logout</mat-icon>
+          <span>Sign out</span>
+        </button>
+      </mat-menu>
+    } @else {
+      <a mat-button routerLink="/login">Sign in</a>
+      <a mat-button routerLink="/register/teacher">Teacher sign-up</a>
+      <a mat-button routerLink="/register/student">Student sign-up</a>
+    }
+  }
+</mat-toolbar>
+
+<main class="app-content">
+  <router-outlet></router-outlet>
+</main>
+
+@if (auth.role() === 'Student') {
+  <app-helper-widget></app-helper-widget>
+}

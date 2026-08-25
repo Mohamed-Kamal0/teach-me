@@ -1,0 +1,52 @@
+[
+  {
+    "keywords": ["join", "code", "joining code", "enroll", "enter code", "new course"],
+    "answer": "Enter your teacher's joining code from your profile to join a course.",
+    "route": "/student/join"
+  },
+  {
+    "keywords": ["my courses", "courses", "what courses", "which courses"],
+    "answer": "Your courses are listed here.",
+    "route": "/student/courses"
+  },
+  {
+    "keywords": ["profile", "account", "my details", "edit profile", "phone", "bio"],
+    "answer": "You can view and edit your profile here.",
+    "route": "/student/profile"
+  },
+  {
+    "keywords": ["new", "what's new", "whats new", "updates", "notification"],
+    "answer": "See what's new across your courses here.",
+    "route": "/student/whats-new"
+  },
+  {
+    "keywords": ["results", "marks", "grade", "grades", "score", "my marks", "pass", "fail"],
+    "answer": "Your marks for every lesson you've been graded on are here.",
+    "route": "/student/marks"
+  },
+  {
+    "keywords": ["recording", "video", "watch", "lesson"],
+    "answer": "Open a course to watch its lesson recordings.",
+    "route": "/student/courses"
+  },
+  {
+    "keywords": ["quiz", "test"],
+    "answer": "A quiz appears on its lesson once your teacher opens it — not before.",
+    "route": "/student/courses"
+  },
+  {
+    "keywords": ["handout", "notes", "material", "document"],
+    "answer": "A handout appears alongside its lesson's recording when your teacher has added one.",
+    "route": "/student/courses"
+  },
+  {
+    "keywords": ["answers", "answer key", "solutions", "answer sheet"],
+    "answer": "Answers are released by your teacher after the quiz opens.",
+    "route": "/student/courses"
+  },
+  {
+    "keywords": ["password", "forgot password", "reset password", "login problem"],
+    "answer": "There's no password reset in this app yet — ask your administrator for help.",
+    "route": null
+  }
+]

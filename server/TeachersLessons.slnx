@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="TeachersLessons.Api.Tests/TeachersLessons.Api.Tests.csproj" />
+  <Project Path="TeachersLessons.Api/TeachersLessons.Api.csproj" />
+</Solution>
