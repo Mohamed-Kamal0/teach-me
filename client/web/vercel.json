@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://YOUR_BACKEND_URL/api/:path*"
+      "destination": "https://teaching-learning-platform.fly.dev/api/:path*"
     },
     {
       "source": "/(.*)",

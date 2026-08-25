@@ -1,6 +1,6 @@
 {
   "/api": {
-    "target": "http://localhost:5099",
+    "target": "https://teaching-learning-platform.fly.dev",
     "secure": false,
     "changeOrigin": true
   }
