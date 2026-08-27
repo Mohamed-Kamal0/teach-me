@@ -1,26 +1,58 @@
+// The shell owns the scroll so the app bar can stay put while the page moves under it.
+.shell { height: 100dvh; background: var(--surface); }
+
 .app-bar {
-  background: var(--primary);
-  color: white;
   position: sticky;
   top: 0;
   z-index: 10;
+  gap: 0.25rem;
+  padding-inline: clamp(0.5rem, 2vw, 1rem);
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12), var(--shadow-1);
 }
 
 .brand {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: white;
+  min-width: 0;                 // lets the title ellipsis instead of shoving the bar wider
+  color: #fff;
   text-decoration: none;
 
+  mat-icon { flex: none; }
+
   span {
-    font-size: 1.1rem;
-    color: white;
+    font-size: clamp(0.95rem, 0.8rem + 0.8vw, 1.15rem);
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 
-.spacer {
-  flex: 1 1 auto;
+.spacer { flex: 1 1 auto; }
+
+.bar-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+
+  a { color: #fff; }
+  // The page you are on, marked in the bar rather than left to memory.
+  a.is-current {
+    background: rgba(255, 255, 255, 0.16);
+    font-weight: 600;
+  }
+}
+
+// Five destinations plus a chip plus an account button stop fitting well before a phone —
+// below this width the same links live in the drawer instead.
+.bar-menu, .bar-menu-out { display: none; }
+
+@media (max-width: 1023px) {
+  .bar-nav { display: none; }
+  .bar-menu, .bar-menu-out { display: inline-flex; }
 }
 
 .role-chip {
@@ -29,20 +61,46 @@
   font-size: 0.8rem;
   font-weight: 600;
   margin-right: 0.5rem;
-  background: rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
 }
 .chip-admin { background: #64748B; color: white; }
 .chip-teacher { background: #EEF2FF; color: var(--primary); }
 .chip-student { background: #CCFBF1; color: #0F766E; }
 
-.menu-email {
-  padding: 0.5rem 1rem;
-  color: var(--muted);
-  font-size: 0.85rem;
+@media (max-width: 400px) {
+  .role-chip { display: none; }     // the drawer says who you are signed in as
 }
 
-.app-content {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 1.5rem 1rem 3rem;
+.menu-email { padding: 0.5rem 1rem; color: var(--muted); font-size: 0.85rem; }
+
+// ---- Drawer ----------------------------------------------------------------
+.drawer { width: min(19rem, 82vw); background: var(--paper); border-right: 1px solid var(--border); }
+
+.drawer__head { padding: 1.25rem 1.25rem 1rem; background: var(--paper-sunk); border-bottom: 1px solid var(--border); }
+.drawer__name { margin: 0; font-family: 'Lora', Georgia, serif; font-weight: 600; }
+.drawer__email { margin: 0; color: var(--muted); font-size: var(--step--1); word-break: break-all; }
+
+.drawer__nav { display: flex; flex-direction: column; padding: 0.75rem 0.5rem; }
+
+.drawer__link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.75rem;
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  text-decoration: none;
+
+  mat-icon { color: var(--muted); }
+
+  &:hover { background: var(--primary-wash); }
+
+  &.is-current {
+    background: var(--primary-wash);
+    color: var(--primary);
+    font-weight: 600;
+    mat-icon { color: var(--primary); }
+  }
 }
+
+.drawer__out { margin: 0.5rem 1rem 1.25rem; justify-content: flex-start; color: var(--danger); }

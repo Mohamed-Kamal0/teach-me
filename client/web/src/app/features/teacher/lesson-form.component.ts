@@ -1,126 +1,195 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { AbstractControl, ReactiveFormsModule, FormBuilder, ValidationErrors, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
-import { MatDatepickerModule } from '@angular/material/datepicker';
-import { MatNativeDateModule } from '@angular/material/core';
+import { MatIconModule } from '@angular/material/icon';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Lesson, LessonRequest, ProblemDetails } from '../../core/models';
+import { applyServerErrors, fieldMessage, revealErrors } from '../../core/form-errors';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
+import { NotifyService } from '../../core/notify.service';
+
+/** A pass mark above the total is not a stricter lesson, it is an unpassable one. */
+function passMarkWithinTotal(group: AbstractControl): ValidationErrors | null {
+  const total = group.get('quizMaxScore')?.value;
+  const pass = group.get('passMark')?.value;
+  return typeof total === 'number' && typeof pass === 'number' && pass > total ? { passTooHigh: true } : null;
+}
 
 @Component({
   selector: 'app-lesson-form',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, MatFormFieldModule, MatInputModule, MatButtonModule, MatCardModule, MatDatepickerModule, MatNativeDateModule],
+  imports: [
+    ReactiveFormsModule, RouterLink, MatFormFieldModule, MatInputModule, MatButtonModule,
+    MatCardModule, MatIconModule, MatProgressSpinnerModule
+  ],
   template: `
-    <mat-card class="form-card">
-      <mat-card-header><mat-card-title class="app-heading">{{ isEdit() ? 'Edit lesson' : 'New lesson' }}</mat-card-title></mat-card-header>
-      <mat-card-content>
-        <form [formGroup]="form" (ngSubmit)="submit()">
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Title</mat-label>
-            <input matInput formControlName="title" />
-            @if (fieldError('title'); as msg) { <mat-error>{{ msg }}</mat-error> }
-          </mat-form-field>
+    <div class="form-page">
+      <mat-card>
+        <mat-card-header>
+          <mat-card-title class="app-heading">{{ isEdit() ? 'Edit lesson' : 'New lesson' }}</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          @if (loadError()) {
+            <p class="notice notice--danger" role="alert">
+              <mat-icon>error_outline</mat-icon>
+              <span>{{ loadError()?.title }}</span>
+            </p>
+            <div class="actions">
+              <button mat-flat-button color="primary" (click)="loadLesson()">Try again</button>
+              <a mat-button routerLink="/teacher/lessons">Back to lessons</a>
+            </div>
+          } @else {
+            <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+              <fieldset class="group">
+                <legend class="eyebrow">The lesson</legend>
+                <div class="grid">
+                  <mat-form-field appearance="outline" class="span-2">
+                    <mat-label>Title</mat-label>
+                    <input matInput formControlName="title" />
+                    @if (message('title', 'Title'); as msg) { <mat-error>{{ msg }}</mat-error> }
+                  </mat-form-field>
 
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Position</mat-label>
-            <input matInput type="number" formControlName="orderIndex" />
-            @if (fieldError('orderIndex'); as msg) { <mat-error>{{ msg }}</mat-error> }
-          </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Position</mat-label>
+                    <input matInput type="number" formControlName="orderIndex" min="1" />
+                    <mat-hint>Where it sits in the course.</mat-hint>
+                    @if (message('orderIndex', 'Position'); as msg) { <mat-error>{{ msg }}</mat-error> }
+                  </mat-form-field>
 
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Recording link</mat-label>
-            <input matInput formControlName="recordingUrl" placeholder="https://…" />
-            @if (fieldError('recordingUrl'); as msg) { <mat-error>{{ msg }}</mat-error> }
-          </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Length (minutes)</mat-label>
+                    <input matInput type="number" formControlName="durationMinutes" min="1" max="600" />
+                    @if (message('durationMinutes', 'Length'); as msg) { <mat-error>{{ msg }}</mat-error> }
+                  </mat-form-field>
+                </div>
+              </fieldset>
 
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Handout link (optional)</mat-label>
-            <input matInput formControlName="handoutUrl" placeholder="https://…" />
-            @if (fieldError('handoutUrl'); as msg) { <mat-error>{{ msg }}</mat-error> }
-          </mat-form-field>
+              <fieldset class="group">
+                <legend class="eyebrow">Links</legend>
+                <div class="grid">
+                  <mat-form-field appearance="outline" class="span-2">
+                    <mat-label>Recording link</mat-label>
+                    <input matInput formControlName="recordingUrl" placeholder="https://…" inputmode="url" />
+                    @if (message('recordingUrl', 'Recording link'); as msg) { <mat-error>{{ msg }}</mat-error> }
+                  </mat-form-field>
 
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Quiz link (optional)</mat-label>
-            <input matInput formControlName="quizUrl" placeholder="https://…" />
-            @if (fieldError('quizUrl'); as msg) { <mat-error>{{ msg }}</mat-error> }
-          </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Handout link (optional)</mat-label>
+                    <input matInput formControlName="handoutUrl" placeholder="https://…" inputmode="url" />
+                    @if (message('handoutUrl', 'Handout link'); as msg) { <mat-error>{{ msg }}</mat-error> }
+                  </mat-form-field>
 
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Answers link (optional)</mat-label>
-            <input matInput formControlName="answersUrl" placeholder="https://…" />
-            @if (fieldError('answersUrl'); as msg) { <mat-error>{{ msg }}</mat-error> }
-          </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Quiz link (optional)</mat-label>
+                    <input matInput formControlName="quizUrl" placeholder="https://…" inputmode="url" />
+                    @if (message('quizUrl', 'Quiz link'); as msg) { <mat-error>{{ msg }}</mat-error> }
+                  </mat-form-field>
 
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Length (minutes)</mat-label>
-            <input matInput type="number" formControlName="durationMinutes" />
-            @if (fieldError('durationMinutes'); as msg) { <mat-error>{{ msg }}</mat-error> }
-          </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Answers link (optional)</mat-label>
+                    <input matInput formControlName="answersUrl" placeholder="https://…" inputmode="url" />
+                    @if (message('answersUrl', 'Answers link'); as msg) { <mat-error>{{ msg }}</mat-error> }
+                  </mat-form-field>
+                </div>
+              </fieldset>
 
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Quiz marked out of</mat-label>
-            <input matInput type="number" formControlName="quizMaxScore" />
-            @if (fieldError('quizMaxScore'); as msg) { <mat-error>{{ msg }}</mat-error> }
-          </mat-form-field>
+              <fieldset class="group">
+                <legend class="eyebrow">Marking</legend>
+                <div class="grid">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Quiz marked out of</mat-label>
+                    <input matInput type="number" formControlName="quizMaxScore" min="1" />
+                    @if (message('quizMaxScore', 'Total'); as msg) { <mat-error>{{ msg }}</mat-error> }
+                  </mat-form-field>
 
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Pass mark</mat-label>
-            <input matInput type="number" formControlName="passMark" />
-            @if (fieldError('passMark'); as msg) { <mat-error>{{ msg }}</mat-error> }
-          </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Pass mark</mat-label>
+                    <input matInput type="number" formControlName="passMark" min="0" />
+                    @if (passTooHigh()) {
+                      <mat-error>A pass mark can't be above the total the quiz is marked out of.</mat-error>
+                    } @else {
+                      @if (message('passMark', 'Pass mark'); as msg) { <mat-error>{{ msg }}</mat-error> }
+                    }
+                  </mat-form-field>
+                </div>
+              </fieldset>
 
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Opens at (leave blank = draft)</mat-label>
-            <input matInput type="datetime-local" formControlName="opensAtUtc" />
-            @if (fieldError('opensAtUtc'); as msg) { <mat-error>{{ msg }}</mat-error> }
-          </mat-form-field>
+              <fieldset class="group">
+                <legend class="eyebrow">Release schedule</legend>
+                <p class="group__note">Each part opens on its own. Leave the recording blank to keep
+                the lesson a draft that no student can see.</p>
+                <div class="grid">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Recording opens at</mat-label>
+                    <input matInput type="datetime-local" formControlName="opensAtUtc" />
+                    <mat-hint>Blank = draft.</mat-hint>
+                    @if (message('opensAtUtc', 'Recording opens at'); as msg) { <mat-error>{{ msg }}</mat-error> }
+                  </mat-form-field>
 
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Quiz opens at</mat-label>
-            <input matInput type="datetime-local" formControlName="quizOpensAtUtc" />
-            @if (fieldError('quizOpensAtUtc'); as msg) { <mat-error>{{ msg }}</mat-error> }
-          </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Quiz opens at</mat-label>
+                    <input matInput type="datetime-local" formControlName="quizOpensAtUtc" />
+                    @if (message('quizOpensAtUtc', 'Quiz opens at'); as msg) { <mat-error>{{ msg }}</mat-error> }
+                  </mat-form-field>
 
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Answers open at</mat-label>
-            <input matInput type="datetime-local" formControlName="answersOpenAtUtc" />
-            @if (fieldError('answersOpenAtUtc'); as msg) { <mat-error>{{ msg }}</mat-error> }
-          </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Answers open at</mat-label>
+                    <input matInput type="datetime-local" formControlName="answersOpenAtUtc" />
+                    @if (message('answersOpenAtUtc', 'Answers open at'); as msg) { <mat-error>{{ msg }}</mat-error> }
+                  </mat-form-field>
+                </div>
+              </fieldset>
 
-          @if (topLevelError()) { <p class="text-danger">{{ topLevelError() }}</p> }
+              @if (banner()) {
+                <p class="notice notice--danger" role="alert">
+                  <mat-icon>error_outline</mat-icon>
+                  <span>{{ banner() }}</span>
+                </p>
+              }
 
-          <div class="actions">
-            <button mat-flat-button color="primary" type="submit" [disabled]="form.invalid || submitting()">
-              {{ isEdit() ? 'Save changes' : 'Create lesson' }}
-            </button>
-            <a mat-button routerLink="/teacher/lessons">Cancel</a>
-          </div>
-        </form>
-      </mat-card-content>
-    </mat-card>
+              <div class="actions">
+                <button mat-flat-button color="primary" type="submit" [disabled]="submitting()">
+                  @if (submitting()) { <mat-spinner diameter="20"></mat-spinner> }
+                  @else { {{ isEdit() ? 'Save changes' : 'Create lesson' }} }
+                </button>
+                <a mat-button routerLink="/teacher/lessons">Cancel</a>
+              </div>
+            </form>
+          }
+        </mat-card-content>
+      </mat-card>
+    </div>
   `,
   styles: [`
-    .form-card { max-width: 520px; margin: 1rem 0; }
-    .full-width { width: 100%; }
-    form { display: flex; flex-direction: column; gap: 0.25rem; }
-    .actions { display: flex; gap: 0.75rem; margin-top: 1rem; }
+    .form-page { max-width: 46rem; margin: clamp(0.5rem, 3vw, 2rem) auto; }
+    .group { border: 0; padding: 0; margin: 0 0 1.5rem; }
+    .group legend { padding: 0; margin-bottom: 0.6rem; }
+    .group__note { margin: -0.25rem 0 0.75rem; color: var(--muted); font-size: var(--step--1); }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 1rem; }
+    .span-2 { grid-column: 1 / -1; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; }
+    @media (max-width: 620px) {
+      .grid { grid-template-columns: minmax(0, 1fr); }
+    }
   `]
 })
 export class LessonFormComponent implements OnInit {
   submitting = signal(false);
-  problem = signal<ProblemDetails | null>(null);
+  banner = signal<string | null>(null);
+  loadError = signal<ProblemDetails | null>(null);
   isEdit = signal(false);
-  private lessonId: string | null = null;
 
+  private lessonId: string | null = null;
   private fb = inject(FormBuilder);
   private http = inject(HttpClient);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private notify = inject(NotifyService);
 
   form = this.fb.group({
     title: ['', [Validators.required, Validators.maxLength(200)]],
@@ -135,45 +204,61 @@ export class LessonFormComponent implements OnInit {
     opensAtUtc: [''],
     quizOpensAtUtc: [''],
     answersOpenAtUtc: ['']
-  });
+  }, { validators: passMarkWithinTotal });
 
   ngOnInit(): void {
     this.lessonId = this.route.snapshot.paramMap.get('id');
     if (this.lessonId) {
       this.isEdit.set(true);
-      this.http.get<Lesson>(`/api/teacher/lessons/${this.lessonId}`).subscribe({
-        next: (lesson) => this.form.patchValue({
-          title: lesson.title,
-          orderIndex: lesson.orderIndex,
-          recordingUrl: lesson.recordingUrl,
-          handoutUrl: lesson.handoutUrl ?? '',
-          quizUrl: lesson.quizUrl ?? '',
-          answersUrl: lesson.answersUrl ?? '',
-          durationMinutes: lesson.durationMinutes,
-          quizMaxScore: lesson.quizMaxScore,
-          passMark: lesson.passMark,
-          opensAtUtc: toLocalInput(lesson.opensAtUtc),
-          quizOpensAtUtc: toLocalInput(lesson.quizOpensAtUtc),
-          answersOpenAtUtc: toLocalInput(lesson.answersOpenAtUtc)
-        }),
-        error: () => this.router.navigate(['/not-found'])
-      });
+      this.loadLesson();
     }
   }
 
-  fieldError(name: string): string | null {
-    return this.problem()?.errors?.[name]?.[0] ?? null;
+  loadLesson(): void {
+    this.loadError.set(null);
+    this.http.get<Lesson>(`/api/teacher/lessons/${this.lessonId}`).subscribe({
+      next: (lesson) => this.form.patchValue({
+        title: lesson.title,
+        orderIndex: lesson.orderIndex,
+        recordingUrl: lesson.recordingUrl,
+        handoutUrl: lesson.handoutUrl ?? '',
+        quizUrl: lesson.quizUrl ?? '',
+        answersUrl: lesson.answersUrl ?? '',
+        durationMinutes: lesson.durationMinutes,
+        quizMaxScore: lesson.quizMaxScore,
+        passMark: lesson.passMark,
+        opensAtUtc: toLocalInput(lesson.opensAtUtc),
+        quizOpensAtUtc: toLocalInput(lesson.quizOpensAtUtc),
+        answersOpenAtUtc: toLocalInput(lesson.answersOpenAtUtc)
+      }),
+      error: (err) => {
+        // Only a 404 means the lesson isn't there. A dropped connection used to land here too,
+        // and telling someone their lesson doesn't exist because the wifi blinked is a lie.
+        if (err instanceof HttpErrorResponse && err.status === 404) {
+          this.router.navigate(['/not-found']);
+          return;
+        }
+        this.loadError.set(problemFrom(err));
+      }
+    });
   }
 
-  topLevelError(): string | null {
-    const p = this.problem();
-    return p && !p.errors ? p.title ?? null : null;
+  message(name: string, label: string): string | null {
+    return fieldMessage(this.form, name, label);
+  }
+
+  passTooHigh(): boolean {
+    const control = this.form.get('passMark');
+    return !!this.form.errors?.['passTooHigh'] && !!(control?.touched || control?.dirty);
   }
 
   submit(): void {
-    if (this.form.invalid) return;
+    if (this.form.invalid) {
+      revealErrors(this.form);
+      return;
+    }
     this.submitting.set(true);
-    this.problem.set(null);
+    this.banner.set(null);
 
     const v = this.form.getRawValue();
     const body: LessonRequest = {
@@ -196,8 +281,14 @@ export class LessonFormComponent implements OnInit {
       : this.http.post('/api/teacher/lessons', body);
 
     req.subscribe({
-      next: () => this.router.navigate(['/teacher/lessons']),
-      error: (err) => { this.problem.set(problemFrom(err)); this.submitting.set(false); }
+      next: () => {
+        this.notify.success(this.isEdit() ? `Saved "${body.title}".` : `Created "${body.title}".`);
+        this.router.navigate(['/teacher/lessons']);
+      },
+      error: (err) => {
+        this.banner.set(applyServerErrors(this.form, problemFrom(err)));
+        this.submitting.set(false);
+      }
     });
   }
 }

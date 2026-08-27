@@ -1,7 +1,8 @@
-import { APP_INITIALIZER, ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
+import { APP_INITIALIZER, ApplicationConfig, importProvidersFrom, provideZoneChangeDetection } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { provideHttpClient, withInterceptors, withXsrfConfiguration } from '@angular/common/http';
+import { MatSnackBarModule } from '@angular/material/snack-bar';
 
 import { routes } from './app.routes';
 import { credentialsInterceptor } from './core/interceptors/credentials.interceptor';
@@ -22,6 +23,9 @@ export const appConfig: ApplicationConfig = {
       withInterceptors([credentialsInterceptor, ngrokInterceptor, errorInterceptor]),
       withXsrfConfiguration({ cookieName: 'XSRF-TOKEN', headerName: 'X-XSRF-TOKEN' })
     ),
+    // MatSnackBar is provided by its module, so the module has to be loaded for NotifyService
+    // to be able to inject it anywhere in the app.
+    importProvidersFrom(MatSnackBarModule),
     { provide: APP_INITIALIZER, useFactory: bootstrapAuth, deps: [AuthService], multi: true }
   ]
 };

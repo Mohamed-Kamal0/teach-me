@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
@@ -10,72 +10,85 @@ import { FormsModule } from '@angular/forms';
 import { StatePanelComponent } from '../../shared/state-panel.component';
 import { LessonMark, ProblemDetails, StudentGradeDetail } from '../../core/models';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
+import { NotifyService } from '../../core/notify.service';
 
 @Component({
   selector: 'app-student-detail',
   standalone: true,
-  imports: [RouterLink, MatTableModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, FormsModule, StatePanelComponent],
+  imports: [
+    RouterLink, MatTableModule, MatButtonModule, MatIconModule, MatFormFieldModule,
+    MatInputModule, FormsModule, StatePanelComponent
+  ],
   template: `
     <a routerLink="/teacher/students" class="back-link"><mat-icon inline>arrow_back</mat-icon> Back to students</a>
 
-    <app-state-panel [loading]="loading()" [error]="error()">
+    <app-state-panel [loading]="loading()" [error]="error()" (retry)="load()">
       @if (data(); as d) {
-        <h1 class="app-heading">{{ d.fullName }}</h1>
-        <p class="text-muted">{{ d.email }}</p>
+        <div class="page-head">
+          <div class="page-head__text">
+            <span class="eyebrow">Student</span>
+            <h1 class="app-heading">{{ d.fullName }}</h1>
+            <p class="page-head__sub">{{ d.email }}</p>
+          </div>
+        </div>
 
         @if (d.marks.length === 0) {
           <p class="text-muted">No marks recorded for this student yet.</p>
         } @else {
-          <table mat-table [dataSource]="d.marks" class="full-width">
-            <ng-container matColumnDef="lessonTitle">
-              <th mat-header-cell *matHeaderCellDef>Lesson</th>
-              <td mat-cell *matCellDef="let row">{{ row.lessonTitle }}</td>
-            </ng-container>
-            <ng-container matColumnDef="score">
-              <th mat-header-cell *matHeaderCellDef>Score</th>
-              <td mat-cell *matCellDef="let row">
-                @if (editingId() === row.markId) {
-                  <mat-form-field appearance="outline" class="score-field">
-                    <input matInput type="number" [(ngModel)]="editScore" />
-                  </mat-form-field>
-                } @else {
-                  <span class="tabular-nums">{{ row.score }} / {{ row.quizMaxScore }}</span>
-                }
-              </td>
-            </ng-container>
-            <ng-container matColumnDef="result">
-              <th mat-header-cell *matHeaderCellDef>Result</th>
-              <td mat-cell *matCellDef="let row">
-                <span [class]="row.passed ? 'text-success' : 'text-danger'">
-                  <mat-icon inline>{{ row.passed ? 'check_circle' : 'cancel' }}</mat-icon>
-                  {{ row.passed ? 'Passed' : 'Failed' }} (pass mark {{ row.passMark }})
-                </span>
-              </td>
-            </ng-container>
-            <ng-container matColumnDef="actions">
-              <th mat-header-cell *matHeaderCellDef></th>
-              <td mat-cell *matCellDef="let row">
-                @if (editingId() === row.markId) {
-                  <button mat-button color="primary" (click)="save(row)">Save</button>
-                  <button mat-button (click)="cancel()">Cancel</button>
-                } @else {
-                  <button mat-button (click)="edit(row)">Correct</button>
-                }
-              </td>
-            </ng-container>
-            <tr mat-header-row *matHeaderRowDef="columns"></tr>
-            <tr mat-row *matRowDef="let row; columns: columns;"></tr>
-          </table>
+          <div class="table-wrap">
+            <table mat-table [dataSource]="d.marks" class="data-table">
+              <ng-container matColumnDef="lessonTitle">
+                <th mat-header-cell *matHeaderCellDef>Lesson</th>
+                <td mat-cell *matCellDef="let row" data-label="Lesson" class="cell-title">{{ row.lessonTitle }}</td>
+              </ng-container>
+              <ng-container matColumnDef="score">
+                <th mat-header-cell *matHeaderCellDef>Score</th>
+                <td mat-cell *matCellDef="let row" data-label="Score">
+                  @if (editingId() === row.markId) {
+                    <mat-form-field appearance="outline" class="score-field" subscriptSizing="dynamic">
+                      <input matInput type="number" [(ngModel)]="editScore" min="0" [max]="row.quizMaxScore"
+                        [attr.aria-label]="'Score out of ' + row.quizMaxScore" />
+                    </mat-form-field>
+                    <span class="score-of tabular-nums">/ {{ row.quizMaxScore }}</span>
+                  } @else {
+                    <span class="tabular-nums">{{ row.score }} / {{ row.quizMaxScore }}</span>
+                  }
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="result">
+                <th mat-header-cell *matHeaderCellDef>Result</th>
+                <td mat-cell *matCellDef="let row" data-label="Result">
+                  <span class="verdict" [class]="row.passed ? 'text-success' : 'text-danger'">
+                    <mat-icon inline>{{ row.passed ? 'check_circle' : 'cancel' }}</mat-icon>
+                    {{ row.passed ? 'Passed' : 'Failed' }} (pass mark {{ row.passMark }})
+                  </span>
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="actions">
+                <th mat-header-cell *matHeaderCellDef><span class="sr-only">Actions</span></th>
+                <td mat-cell *matCellDef="let row" data-label="">
+                  @if (editingId() === row.markId) {
+                    <button mat-flat-button color="primary" (click)="save(row)" [disabled]="saving()">Save</button>
+                    <button mat-button (click)="cancel()">Cancel</button>
+                  } @else {
+                    <button mat-button (click)="edit(row)">Correct</button>
+                  }
+                </td>
+              </ng-container>
+              <tr mat-header-row *matHeaderRowDef="columns"></tr>
+              <tr mat-row *matRowDef="let row; columns: columns;"></tr>
+            </table>
+          </div>
         }
-
-        @if (actionError()) { <p class="text-danger">{{ actionError() }}</p> }
       }
     </app-state-panel>
   `,
   styles: [`
     .back-link { display: inline-flex; align-items: center; gap: 0.3rem; text-decoration: none; margin-bottom: 1rem; }
-    .full-width { width: 100%; margin-top: 1rem; }
-    .score-field { width: 90px; }
+    .cell-title { font-weight: 500; }
+    .score-field { width: 5.5rem; }
+    .score-of { margin-left: 0.4rem; color: var(--muted); }
+    .verdict { display: inline-flex; align-items: center; gap: 0.25rem; }
   `]
 })
 export class StudentDetailComponent implements OnInit {
@@ -83,13 +96,14 @@ export class StudentDetailComponent implements OnInit {
   loading = signal(true);
   error = signal<ProblemDetails | null>(null);
   data = signal<StudentGradeDetail | null>(null);
-  actionError = signal<string | null>(null);
   editingId = signal<string | null>(null);
+  saving = signal(false);
   editScore = 0;
 
   private studentId!: string;
-
-  constructor(private http: HttpClient, private route: ActivatedRoute) {}
+  private http = inject(HttpClient);
+  private route = inject(ActivatedRoute);
+  private notify = inject(NotifyService);
 
   ngOnInit(): void {
     this.studentId = this.route.snapshot.paramMap.get('studentId')!;
@@ -108,7 +122,6 @@ export class StudentDetailComponent implements OnInit {
   edit(row: LessonMark): void {
     this.editingId.set(row.markId);
     this.editScore = row.score;
-    this.actionError.set(null);
   }
 
   cancel(): void {
@@ -116,9 +129,24 @@ export class StudentDetailComponent implements OnInit {
   }
 
   save(row: LessonMark): void {
+    // Checked here as well as on the server so an obvious slip is answered without a round trip.
+    if (this.editScore < 0 || this.editScore > row.quizMaxScore) {
+      this.notify.error(`A score for "${row.lessonTitle}" has to be between 0 and ${row.quizMaxScore}.`);
+      return;
+    }
+
+    this.saving.set(true);
     this.http.put(`/api/teacher/marks/${row.markId}`, { score: this.editScore }).subscribe({
-      next: () => { this.editingId.set(null); this.load(); },
-      error: (err) => this.actionError.set(problemFrom(err).title ?? 'Could not save the correction.')
+      next: () => {
+        this.editingId.set(null);
+        this.saving.set(false);
+        this.notify.success(`Corrected the mark for "${row.lessonTitle}".`);
+        this.load();
+      },
+      error: (err) => {
+        this.saving.set(false);
+        this.notify.error(problemFrom(err).title ?? 'Could not save the correction.');
+      }
     });
   }
 }

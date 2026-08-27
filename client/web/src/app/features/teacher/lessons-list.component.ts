@@ -1,90 +1,84 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { StatePanelComponent } from '../../shared/state-panel.component';
+import { ReleaseRailComponent } from '../../shared/release-rail.component';
 import { Lesson, PagedResult, ProblemDetails } from '../../core/models';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
+import { NotifyService } from '../../core/notify.service';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 
 @Component({
   selector: 'app-lessons-list',
   standalone: true,
-  imports: [RouterLink, MatTableModule, MatButtonModule, MatIconModule, MatChipsModule, MatDialogModule, StatePanelComponent],
+  imports: [
+    RouterLink, MatTableModule, MatButtonModule, MatIconModule, MatDialogModule,
+    StatePanelComponent, ReleaseRailComponent
+  ],
   template: `
-    <div class="header">
-      <h1 class="app-heading">Your lessons</h1>
-      <a mat-flat-button color="primary" routerLink="/teacher/lessons/new">
-        <mat-icon>add</mat-icon> New lesson
-      </a>
+    <div class="page-head">
+      <div class="page-head__text">
+        <span class="eyebrow">Teacher</span>
+        <h1 class="app-heading">Your lessons</h1>
+        <p class="page-head__sub">The arrows set the order students see. Each part opens on its own schedule.</p>
+      </div>
+      <div class="page-head__actions">
+        <a mat-flat-button color="primary" routerLink="/teacher/lessons/new">
+          <mat-icon>add</mat-icon> New lesson
+        </a>
+      </div>
     </div>
 
     <app-state-panel [loading]="loading()" [error]="error()" [empty]="(rows()?.length ?? 0) === 0"
+      emptyIcon="menu_book" (retry)="load()"
       emptyMessage="No lessons yet. Add your first one to get started.">
-      <table mat-table [dataSource]="rows() ?? []" class="full-width">
-        <ng-container matColumnDef="order">
-          <th mat-header-cell *matHeaderCellDef>#</th>
-          <td mat-cell *matCellDef="let row" class="tabular-nums">{{ row.orderIndex }}</td>
-        </ng-container>
-        <ng-container matColumnDef="title">
-          <th mat-header-cell *matHeaderCellDef>Title</th>
-          <td mat-cell *matCellDef="let row">{{ row.title }}</td>
-        </ng-container>
-        <ng-container matColumnDef="moments">
-          <th mat-header-cell *matHeaderCellDef>Moments</th>
-          <td mat-cell *matCellDef="let row">
-            <span class="moment" [class.is-open]="row.lessonOpen">
-              <mat-icon inline>{{ row.lessonOpen ? 'check_circle' : 'lock_clock' }}</mat-icon>
-              {{ row.lessonOpen ? 'Open' : 'Not open' }}
-            </span>
-            @if (row.quizUrl) {
-              <span class="moment" [class.is-open]="row.quizOpen">
-                <mat-icon inline>{{ row.quizOpen ? 'quiz' : 'lock_clock' }}</mat-icon>
-                {{ row.quizOpen ? 'Quiz open' : 'Quiz not open' }}
-              </span>
-            }
-            @if (row.answersUrl) {
-              <span class="moment" [class.is-open]="row.answersOpen">
-                <mat-icon inline>{{ row.answersOpen ? 'fact_check' : 'lock_clock' }}</mat-icon>
-                {{ row.answersOpen ? 'Answers open' : 'Answers not open' }}
-              </span>
-            }
-          </td>
-        </ng-container>
-        <ng-container matColumnDef="reorder">
-          <th mat-header-cell *matHeaderCellDef></th>
-          <td mat-cell *matCellDef="let row; let i = index">
-            <button mat-icon-button [disabled]="i === 0" (click)="move(i, -1)" aria-label="Move up"><mat-icon>arrow_upward</mat-icon></button>
-            <button mat-icon-button [disabled]="i === (rows()?.length ?? 1) - 1" (click)="move(i, 1)" aria-label="Move down"><mat-icon>arrow_downward</mat-icon></button>
-          </td>
-        </ng-container>
-        <ng-container matColumnDef="actions">
-          <th mat-header-cell *matHeaderCellDef></th>
-          <td mat-cell *matCellDef="let row">
-            <a mat-button [routerLink]="['/teacher/lessons', row.id, 'edit']">Edit</a>
-            <button mat-button color="warn" (click)="remove(row)">Delete</button>
-          </td>
-        </ng-container>
-        <tr mat-header-row *matHeaderRowDef="columns"></tr>
-        <tr mat-row *matRowDef="let row; columns: columns;"></tr>
-      </table>
+      <div class="table-wrap">
+        <table mat-table [dataSource]="rows() ?? []" class="data-table">
+          <ng-container matColumnDef="order">
+            <th mat-header-cell *matHeaderCellDef>#</th>
+            <td mat-cell *matCellDef="let row" data-label="Order" class="tabular-nums">{{ row.orderIndex }}</td>
+          </ng-container>
+          <ng-container matColumnDef="title">
+            <th mat-header-cell *matHeaderCellDef>Title</th>
+            <td mat-cell *matCellDef="let row" data-label="Title" class="cell-title">{{ row.title }}</td>
+          </ng-container>
+          <ng-container matColumnDef="moments">
+            <th mat-header-cell *matHeaderCellDef>Moments</th>
+            <td mat-cell *matCellDef="let row" data-label="Moments" class="cell-rail">
+              <app-release-rail [lesson]="row" [compact]="true"></app-release-rail>
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="reorder">
+            <th mat-header-cell *matHeaderCellDef><span class="sr-only">Reorder</span></th>
+            <td mat-cell *matCellDef="let row; let i = index" data-label="">
+              <button mat-icon-button [disabled]="i === 0" (click)="move(i, -1)" [attr.aria-label]="'Move ' + row.title + ' up'"><mat-icon>arrow_upward</mat-icon></button>
+              <button mat-icon-button [disabled]="i === (rows()?.length ?? 1) - 1" (click)="move(i, 1)" [attr.aria-label]="'Move ' + row.title + ' down'"><mat-icon>arrow_downward</mat-icon></button>
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef><span class="sr-only">Actions</span></th>
+            <td mat-cell *matCellDef="let row" data-label="">
+              <a mat-button [routerLink]="['/teacher/lessons', row.id, 'edit']">Edit</a>
+              <button mat-button class="danger-action" (click)="remove(row)">Delete</button>
+            </td>
+          </ng-container>
+          <tr mat-header-row *matHeaderRowDef="columns"></tr>
+          <tr mat-row *matRowDef="let row; columns: columns;"></tr>
+        </table>
+      </div>
     </app-state-panel>
-
-    @if (actionError()) { <p class="text-danger">{{ actionError() }}</p> }
   `,
   styles: [`
-    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-    .full-width { width: 100%; }
-    .moment {
-      display: inline-flex; align-items: center; gap: 0.2rem;
-      margin-right: 0.75rem; font-size: 0.8rem; white-space: nowrap;
-      color: var(--warning-text);
+    .cell-title { font-weight: 500; }
+    .cell-rail { min-width: 20rem; padding-block: 0.75rem; }
+    .danger-action { color: var(--danger); }
+    @media (max-width: 720px) {
+      .cell-rail { min-width: 0; display: block; text-align: left; }
     }
-    .moment.is-open { color: var(--success); }
   `]
 })
 export class LessonsListComponent implements OnInit {
@@ -92,9 +86,10 @@ export class LessonsListComponent implements OnInit {
   loading = signal(true);
   error = signal<ProblemDetails | null>(null);
   rows = signal<Lesson[] | null>(null);
-  actionError = signal<string | null>(null);
 
-  constructor(private http: HttpClient, private dialog: MatDialog) {}
+  private http = inject(HttpClient);
+  private dialog = inject(MatDialog);
+  private notify = inject(NotifyService);
 
   ngOnInit(): void {
     this.load();
@@ -121,7 +116,11 @@ export class LessonsListComponent implements OnInit {
 
     this.http.put('/api/teacher/lessons/order', { lessonIds: reordered.map(r => r.id) }).subscribe({
       next: () => this.load(),
-      error: (err) => { this.actionError.set(problemFrom(err).title ?? 'Could not reorder.'); this.load(); }
+      // A failure at the foot of a long table is a failure nobody reads, so it arrives over it.
+      error: (err) => {
+        this.notify.error(problemFrom(err).title ?? 'Could not change the order.');
+        this.load();
+      }
     });
   }
 
@@ -131,10 +130,9 @@ export class LessonsListComponent implements OnInit {
     });
     ref.afterClosed().subscribe((confirmed) => {
       if (!confirmed) return;
-      this.actionError.set(null);
       this.http.delete(`/api/teacher/lessons/${row.id}`).subscribe({
-        next: () => this.load(),
-        error: (err) => this.actionError.set(problemFrom(err).title ?? 'Could not delete this lesson.')
+        next: () => { this.notify.success(`Deleted "${row.title}".`); this.load(); },
+        error: (err) => this.notify.error(problemFrom(err).title ?? 'Could not delete this lesson.')
       });
     });
   }

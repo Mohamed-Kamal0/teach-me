@@ -1,58 +1,86 @@
-<mat-toolbar class="app-bar">
-  <a routerLink="/" class="brand">
-    <mat-icon>school</mat-icon>
-    <span class="app-heading">Teachers, Lessons and Students</span>
-  </a>
+<mat-sidenav-container class="shell" [hasBackdrop]="true">
+  <mat-sidenav class="drawer" mode="over" [opened]="drawerOpen()" (closedStart)="drawerOpen.set(false)">
+    <div class="drawer__head">
+      <span class="eyebrow">Signed in as</span>
+      <p class="drawer__name">{{ auth.me()?.fullName }}</p>
+      <p class="drawer__email">{{ auth.me()?.email }}</p>
+    </div>
+    <nav class="drawer__nav" aria-label="Sections">
+      @for (link of links(); track link.path) {
+        <a [routerLink]="link.path" routerLinkActive="is-current" class="drawer__link">
+          <mat-icon>{{ link.icon }}</mat-icon>
+          <span>{{ link.label }}</span>
+        </a>
+      }
+    </nav>
+    <button mat-button class="drawer__out" (click)="signOut()">
+      <mat-icon>logout</mat-icon> Sign out
+    </button>
+  </mat-sidenav>
 
-  <span class="spacer"></span>
-
-  @if (auth.bootstrapped()) {
-    @if (auth.isAuthenticated()) {
-      <span class="role-chip" [class]="roleChipClass()">{{ auth.role() }}</span>
-
-      @switch (auth.role()) {
-        @case ('Admin') {
-          <a mat-button routerLink="/admin/approvals">Approvals</a>
-        }
-        @case ('Teacher') {
-          <a mat-button routerLink="/teacher/standing">Standing</a>
-          @if (auth.me()?.teacherStatus === 'Approved') {
-            <a mat-button routerLink="/teacher/lessons">Lessons</a>
-            <a mat-button routerLink="/teacher/students">Students</a>
-            <a mat-button routerLink="/teacher/progress">Progress</a>
-          }
-        }
-        @case ('Student') {
-          <a mat-button routerLink="/student/courses">Courses</a>
-          <a mat-button routerLink="/student/join">Join</a>
-          <a mat-button routerLink="/student/whats-new">What's New</a>
-          <a mat-button routerLink="/student/marks">Marks</a>
-          <a mat-button routerLink="/student/profile">Profile</a>
-        }
+  <mat-sidenav-content>
+    <mat-toolbar class="app-bar">
+      @if (auth.isAuthenticated() && links().length) {
+        <button mat-icon-button class="bar-menu" (click)="drawerOpen.set(true)" aria-label="Open the menu">
+          <mat-icon>menu</mat-icon>
+        </button>
       }
 
-      <button mat-icon-button [matMenuTriggerFor]="menu" aria-label="Account menu">
-        <mat-icon>account_circle</mat-icon>
-      </button>
-      <mat-menu #menu="matMenu">
-        <div class="menu-email">{{ auth.me()?.email }}</div>
-        <button mat-menu-item (click)="signOut()">
-          <mat-icon>logout</mat-icon>
-          <span>Sign out</span>
-        </button>
-      </mat-menu>
-    } @else {
-      <a mat-button routerLink="/login">Sign in</a>
-      <a mat-button routerLink="/register/teacher">Teacher sign-up</a>
-      <a mat-button routerLink="/register/student">Student sign-up</a>
+      <a routerLink="/" class="brand">
+        <mat-icon>school</mat-icon>
+        <span class="app-heading">Teachers, Lessons and Students</span>
+      </a>
+
+      <span class="spacer"></span>
+
+      @if (auth.bootstrapped()) {
+        @if (auth.isAuthenticated()) {
+          <span class="role-chip" [class]="roleChipClass()">{{ auth.role() }}</span>
+
+          <nav class="bar-nav" aria-label="Sections">
+            @for (link of links(); track link.path) {
+              <a mat-button [routerLink]="link.path" routerLinkActive="is-current">{{ link.label }}</a>
+            }
+          </nav>
+
+          <button mat-icon-button [matMenuTriggerFor]="menu" aria-label="Account menu">
+            <mat-icon>account_circle</mat-icon>
+          </button>
+          <mat-menu #menu="matMenu">
+            <div class="menu-email">{{ auth.me()?.email }}</div>
+            <button mat-menu-item (click)="signOut()">
+              <mat-icon>logout</mat-icon>
+              <span>Sign out</span>
+            </button>
+          </mat-menu>
+        } @else {
+          <nav class="bar-nav" aria-label="Account">
+            <a mat-button routerLink="/login">Sign in</a>
+            <a mat-button routerLink="/register/teacher">Teacher sign-up</a>
+            <a mat-button routerLink="/register/student">Student sign-up</a>
+          </nav>
+          <button mat-icon-button class="bar-menu-out" [matMenuTriggerFor]="outMenu" aria-label="Account menu">
+            <mat-icon>more_vert</mat-icon>
+          </button>
+          <mat-menu #outMenu="matMenu">
+            <a mat-menu-item routerLink="/login">Sign in</a>
+            <a mat-menu-item routerLink="/register/teacher">Teacher sign-up</a>
+            <a mat-menu-item routerLink="/register/student">Student sign-up</a>
+          </mat-menu>
+        }
+      }
+    </mat-toolbar>
+
+    <main class="app-content">
+      @if (auth.serverUnreachable()) {
+        <app-server-down></app-server-down>
+      } @else {
+        <router-outlet></router-outlet>
+      }
+    </main>
+
+    @if (auth.role() === 'Student') {
+      <app-helper-widget></app-helper-widget>
     }
-  }
-</mat-toolbar>
-
-<main class="app-content">
-  <router-outlet></router-outlet>
-</main>
-
-@if (auth.role() === 'Student') {
-  <app-helper-widget></app-helper-widget>
-}
+  </mat-sidenav-content>
+</mat-sidenav-container>
