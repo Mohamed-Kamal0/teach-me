@@ -19,10 +19,11 @@
   </mat-sidenav>
 
   <mat-sidenav-content>
-    <mat-toolbar class="app-bar">
+    <mat-toolbar class="app-bar" [class.bar--few]="links().length <= 2">
       @if (auth.isAuthenticated() && links().length) {
-        <button mat-icon-button class="bar-menu" (click)="drawerOpen.set(true)" aria-label="Open the menu">
+        <button mat-button class="bar-menu" (click)="drawerOpen.set(true)">
           <mat-icon>menu</mat-icon>
+          <span>Menu</span>
         </button>
       }
 
@@ -39,7 +40,10 @@
 
           <nav class="bar-nav" aria-label="Sections">
             @for (link of links(); track link.path) {
-              <a mat-button [routerLink]="link.path" routerLinkActive="is-current">{{ link.label }}</a>
+              <a mat-button [routerLink]="link.path" routerLinkActive="is-current">
+                <mat-icon>{{ link.icon }}</mat-icon>
+                <span>{{ link.label }}</span>
+              </a>
             }
           </nav>
 

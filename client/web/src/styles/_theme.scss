@@ -46,6 +46,16 @@ $web-theme: mat.define-theme((
   --success-wash: #ECF3EF;
   --warning-wash: #FBF3E4;
 
+  // Role coding (plan §8) — slate / indigo / teal, warmed onto this palette so a three-login
+  // demo stays legible without three cool hues fighting the paper. Ratios are chip ink on chip
+  // fill: admin 6.6:1, teacher 8.5:1, student 5.7:1.
+  --role-admin-bg: var(--paper-sunk);
+  --role-admin-ink: #4B5563;
+  --role-teacher-bg: var(--primary-wash);
+  --role-teacher-ink: var(--primary);
+  --role-student-bg: #DCEBE6;
+  --role-student-ink: #1F6357;
+
   // Type scale — fluid, so a phone and a projector both get sensible sizes.
   --step--1: 0.8125rem;                             // 13px captions and column labels
   --step-0: 0.9375rem;                              // 15px body and tables (plan §8)
@@ -315,9 +325,12 @@ a:hover { text-decoration-thickness: 2px; }
   box-shadow: var(--shadow-1);
 }
 .mat-mdc-card-title { font-family: 'Lora', Georgia, serif; }
-// Outlined fields float their label above the border, which collides with a card title sitting
-// directly on top of the first one.
-.mat-mdc-card-header { padding-bottom: 0.75rem; }
+// An outlined field draws its floating label ~7px ABOVE its own box, and Material leaves the
+// card header no bottom padding — so the label of the first field lands on the card title.
+// Qualifying the selector matters: Material injects the card's own stylesheet into <head> after
+// this one, so a bare `.mat-mdc-card-header` loses the cascade at equal specificity and the
+// padding never applied. 1rem clears the label's overhang and still leaves a visible gap.
+.mat-mdc-card .mat-mdc-card-header { padding-bottom: 1rem; }
 
 // Form fields sit on paper so a card and its inputs read as one object.
 .mat-mdc-form-field { width: 100%; }

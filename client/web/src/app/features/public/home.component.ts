@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -6,6 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { StatePanelComponent } from '../../shared/state-panel.component';
 import { HomeResponse, ProblemDetails } from '../../core/models';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
+import { AuthService } from '../../core/auth.service';
 
 @Component({
   selector: 'app-home',
@@ -55,11 +56,13 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
       }
     </app-state-panel>
 
-    <div class="actions">
-      <a mat-flat-button color="primary" routerLink="/register/teacher">Register as a teacher</a>
-      <a mat-stroked-button routerLink="/register/student">Register as a student</a>
-      <a mat-button routerLink="/login">Sign in</a>
-    </div>
+    @if (!auth.isAuthenticated()) {
+      <div class="actions">
+        <a mat-flat-button color="primary" routerLink="/register/teacher">Register as a teacher</a>
+        <a mat-stroked-button routerLink="/register/student">Register as a student</a>
+        <a mat-button routerLink="/login">Sign in</a>
+      </div>
+    }
   `,
   styles: [`
     .hero { max-width: 46rem; }
@@ -147,6 +150,8 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
   `]
 })
 export class HomeComponent implements OnInit {
+  readonly auth = inject(AuthService);
+
   loading = signal(true);
   error = signal<ProblemDetails | null>(null);
   data = signal<HomeResponse | null>(null);
