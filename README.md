@@ -10,12 +10,12 @@ The brief is [`project.md`](project.md); the design and schedule behind it is [`
 
 ## What you need
 
-| Tool | Version used |
-| :--- | :--- |
-| .NET SDK | 10.0.303 |
+| Tool        | Version used                                 |
+| :---------- | :------------------------------------------- |
+| .NET SDK    | 10.0.303                                     |
 | `dotnet-ef` | 10.0.10 (`dotnet tool install -g dotnet-ef`) |
-| Node.js | 22.14.0 |
-| npm | 10.9.2 |
+| Node.js     | 22.14.0                                      |
+| npm         | 10.9.2                                       |
 
 No database engine to install — the app uses SQLite, and the file is created for you.
 
@@ -71,15 +71,15 @@ Open **http://localhost:4200**. The dev server proxies `/api` to the API
 
 All demo accounts use the password **`Demo1234`**; the administrator uses whatever you set above.
 
-| Who | Email |
-| :--- | :--- |
-| Administrator | `admin@teacherslessons.test` (password: as set in step 1) |
-| Teacher — approved | `teacher.approved@demo.test` |
-| Teacher — approved (2nd course) | `teacher.second@demo.test` |
-| Teacher — pending | `teacher.pending@demo.test` |
-| Teacher — turned away | `teacher.rejected@demo.test` |
-| Student — on two courses | `student.one@demo.test` |
-| Student — on one course | `student.two@demo.test` |
+| Who                             | Email                                                     |
+| :------------------------------ | :-------------------------------------------------------- |
+| Administrator                   | `admin@teacherslessons.test` (password: as set in step 1) |
+| Teacher — approved              | `teacher.approved@demo.test`                              |
+| Teacher — approved (2nd course) | `teacher.second@demo.test`                                |
+| Teacher — pending               | `teacher.pending@demo.test`                               |
+| Teacher — turned away           | `teacher.rejected@demo.test`                              |
+| Student — on two courses        | `student.one@demo.test`                                   |
+| Student — on one course         | `student.two@demo.test`                                   |
 
 The seeded lessons have **deliberately staggered moments**: one fully open, one whose quiz opens
 tomorrow, one whose answers are already released, and one not open at all. That is what makes the
@@ -93,10 +93,10 @@ timing requirement demonstrable without touching the database by hand.
 
 Two services, one behind the other:
 
-| Piece | Host | What it serves |
-| :--- | :--- | :--- |
-| Angular client | Vercel (Hobby, free) | the static SPA, plus a rewrite of `/api/*` |
-| .NET API | Fly.io (`fly.toml`, Docker + volume) | everything under `/api` |
+| Piece          | Host                                 | What it serves                             |
+| :------------- | :----------------------------------- | :----------------------------------------- |
+| Angular client | Vercel (Hobby, free)                 | the static SPA, plus a rewrite of `/api/*` |
+| .NET API       | Fly.io (`fly.toml`, Docker + volume) | everything under `/api`                    |
 
 **Why Fly.** .NET 10 is too new for buildpack hosts, so the API ships as a Docker image. What sets
 Fly apart from the free tiers is the **volume**: the SQLite database is a persistent file, so data
@@ -154,12 +154,12 @@ dotnet test
 
 Eighteen tests across the four suites that a click-through cannot give you confidence in:
 
-| Suite | What it defends |
-| :--- | :--- |
-| **A** — `PendingTeacherTests` | A pending or turned-away teacher is refused every teacher route; approval takes effect on the **next call**, with no re-login |
-| **B** — `MarkConstraintTests` | No second mark for the same student on the same lesson (409); the score bound is read **from the lesson**; `passed` sent by a client is ignored |
-| **C** — `TimingEnforcementTests` | An unopened quiz has **no `quizUrl` key in the raw JSON** — asserted on the response string, because a missing key and a null key deserialise identically |
-| **D** — `OwnershipIsolationTests` | A teacher cannot reach another teacher's lesson (404); a student cannot read a course they never joined (**403**, not an empty list) |
+| Suite                             | What it defends                                                                                                                                           |
+| :-------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A** — `PendingTeacherTests`     | A pending or turned-away teacher is refused every teacher route; approval takes effect on the **next call**, with no re-login                             |
+| **B** — `MarkConstraintTests`     | No second mark for the same student on the same lesson (409); the score bound is read **from the lesson**; `passed` sent by a client is ignored           |
+| **C** — `TimingEnforcementTests`  | An unopened quiz has **no `quizUrl` key in the raw JSON** — asserted on the response string, because a missing key and a null key deserialise identically |
+| **D** — `OwnershipIsolationTests` | A teacher cannot reach another teacher's lesson (404); a student cannot read a course they never joined (**403**, not an empty list)                      |
 
 The tests run against **`Microsoft.Data.Sqlite`** in shared-cache in-memory mode, never EF Core's
 InMemory provider — that provider ignores unique indexes, so suite B would pass whether or not the
@@ -224,11 +224,11 @@ client/web/src/app/
 
 **Dates are stored as UTC `DateTime`, not `DateTimeOffset`.** EF Core's SQLite provider only
 translates equality on `DateTimeOffset` — not `<`/`<=` — and the entire timing story depends on those
-comparisons running *in the database*. A value converter (`Data/DateTimeOffsetConverters.cs`) keeps
+comparisons running _in the database_. A value converter (`Data/DateTimeOffsetConverters.cs`) keeps
 the C# model on `DateTimeOffset` while making every comparison translatable.
 
 **The `XSRF-TOKEN` cookie is written by our own middleware.** ASP.NET Core's antiforgery cookie
-carries the *cookie* token, which is a different value from the *request* token that Angular must
+carries the _cookie_ token, which is a different value from the _request_ token that Angular must
 echo back in `X-XSRF-TOKEN`. `Common/AntiforgeryMiddleware.cs` publishes the request token as a
 separate, non-`httpOnly` cookie so Angular's built-in `withXsrfConfiguration` pairs correctly.
 Antiforgery tokens are also bound to the signed-in user, which is why the client calls `/api/me`

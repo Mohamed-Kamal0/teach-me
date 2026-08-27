@@ -1,6 +1,7 @@
 import { Component, Input, OnChanges } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { MatIconModule } from '@angular/material/icon';
+import { MatButtonModule } from '@angular/material/button';
 
 type Kind = 'youtube' | 'vimeo' | 'video' | 'fallback';
 
@@ -9,7 +10,7 @@ type Kind = 'youtube' | 'vimeo' | 'video' | 'fallback';
 @Component({
   selector: 'app-media-embed',
   standalone: true,
-  imports: [MatIconModule],
+  imports: [MatIconModule, MatButtonModule],
   template: `
     @switch (kind) {
       @case ('youtube') {
@@ -23,23 +24,32 @@ type Kind = 'youtube' | 'vimeo' | 'video' | 'fallback';
         </div>
       }
       @case ('video') {
-        <video [src]="url" controls style="width:100%; max-height:480px; border-radius:8px;"></video>
+        <video [src]="url" controls class="video"></video>
       }
       @default {
         <div class="fallback">
-          <mat-icon class="text-muted">play_circle</mat-icon>
+          <span class="fallback__badge"><mat-icon>play_circle</mat-icon></span>
           <p>This recording can't be played inline here.</p>
-          <a [href]="url" target="_blank" rel="noopener">Open the recording</a>
+          <a mat-stroked-button [href]="url" target="_blank" rel="noopener">Open the recording</a>
         </div>
       }
     }
   `,
   styles: [`
-    .embed-wrap { position: relative; padding-top: 56.25%; }
-    .embed-wrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 8px; }
+    /* 16:9 without a fixed height, so the recording fits a phone and a projector alike. */
+    .embed-wrap { position: relative; padding-top: 56.25%; background: var(--paper-sunk); border-radius: var(--radius-sm); }
+    .embed-wrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; border-radius: var(--radius-sm); }
+    .video { width: 100%; max-height: 30rem; border-radius: var(--radius-sm); background: #000; }
     .fallback {
-      display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
-      padding: 2rem; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted);
+      display: flex; flex-direction: column; align-items: center; gap: 0.6rem;
+      padding: clamp(1.5rem, 5vw, 2.5rem);
+      border: 1px dashed var(--border); border-radius: var(--radius-sm);
+      background: var(--paper-sunk); color: var(--muted); text-align: center;
+    }
+    .fallback p { margin: 0; }
+    .fallback__badge {
+      display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px;
+      background: var(--paper); color: var(--primary);
     }
   `]
 })
@@ -52,15 +62,21 @@ export class MediaEmbedComponent implements OnChanges {
   constructor(private sanitizer: DomSanitizer) {}
 
   ngOnChanges(): void {
+    // Reset first: a stale kind or src from the previous URL would otherwise survive the change.
+    this.kind = 'fallback';
+    this.safeUrl = null;
+
     const embedUrl = this.toEmbedUrl(this.url);
     if (embedUrl) {
       this.safeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(embedUrl);
-    } else {
-      this.kind = /\.(mp4|webm|ogg)(\?.*)?$/i.test(this.url) ? 'video' : 'fallback';
+    } else if (/\.(mp4|webm|ogg)(\?.*)?$/i.test(this.url ?? '')) {
+      this.kind = 'video';
     }
   }
 
   private toEmbedUrl(url: string): string | null {
+    if (!url) return null;
+
     const youtube = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([\w-]{6,})/);
     if (youtube) {
       this.kind = 'youtube';

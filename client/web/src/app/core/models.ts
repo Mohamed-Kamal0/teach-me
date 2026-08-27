@@ -28,6 +28,8 @@ export interface ProblemDetails {
   status?: number;
   detail?: string;
   errors?: Record<string, string[]>;
+  /** True when the request never reached the server — a different fix from any server answer. */
+  offline?: boolean;
 }
 
 export interface HomeResponse {
@@ -59,9 +61,12 @@ export interface Lesson {
   opensAtUtc: string | null;
   quizOpensAtUtc: string | null;
   answersOpenAtUtc: string | null;
-  lessonOpen: boolean;
-  quizOpen: boolean;
-  answersOpen: boolean;
+  // Only the teacher's payload carries these. A student is sent the schedule but not the verdict,
+  // because for them the server withholds each URL until its moment — so a URL that is present
+  // *is* the verdict. See LessonQueries.cs / StudentLessonDto.cs on the server.
+  lessonOpen?: boolean;
+  quizOpen?: boolean;
+  answersOpen?: boolean;
 }
 
 export interface LessonRequest {

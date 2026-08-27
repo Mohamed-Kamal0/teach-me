@@ -5,8 +5,10 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { MatIconModule } from '@angular/material/icon';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuthService } from '../../core/auth.service';
-import { ProblemDetails } from '../../core/models';
+import { PASSWORD_RULE, applyServerErrors, fieldMessage, revealErrors } from '../../core/form-errors';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
 
 function passwordsMatch(control: AbstractControl): ValidationErrors | null {
@@ -18,64 +20,83 @@ function passwordsMatch(control: AbstractControl): ValidationErrors | null {
 @Component({
   selector: 'app-register-teacher',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, MatFormFieldModule, MatInputModule, MatButtonModule, MatCardModule],
+  imports: [
+    ReactiveFormsModule, RouterLink, MatFormFieldModule, MatInputModule, MatButtonModule,
+    MatCardModule, MatIconModule, MatProgressSpinnerModule
+  ],
   template: `
-    @if (done()) {
-      <mat-card class="form-card">
-        <mat-card-content>
-          <h2 class="app-heading">Your account is waiting</h2>
-          <p>Thanks for registering — an administrator will review your account before you can
-          teach here. <a routerLink="/login">Sign in</a> any time to check your standing.</p>
-        </mat-card-content>
-      </mat-card>
-    } @else {
-      <mat-card class="form-card">
-        <mat-card-header><mat-card-title class="app-heading">Register as a teacher</mat-card-title></mat-card-header>
-        <mat-card-content>
-          <form [formGroup]="form" (ngSubmit)="submit()">
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Full name</mat-label>
-              <input matInput formControlName="fullName" />
-              @if (fieldError('fullName'); as msg) { <mat-error>{{ msg }}</mat-error> }
-            </mat-form-field>
+    <div class="form-page">
+      @if (done()) {
+        <mat-card class="form-card">
+          <mat-card-content>
+            <span class="badge"><mat-icon>lock_clock</mat-icon></span>
+            <h2 class="app-heading">Your account is waiting</h2>
+            <p>Thanks for registering — an administrator will review your account before you can
+            teach here. <a routerLink="/login">Sign in</a> any time to check your standing.</p>
+          </mat-card-content>
+        </mat-card>
+      } @else {
+        <mat-card class="form-card">
+          <mat-card-header><mat-card-title class="app-heading">Register as a teacher</mat-card-title></mat-card-header>
+          <mat-card-content>
+            <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+              <mat-form-field appearance="outline">
+                <mat-label>Full name</mat-label>
+                <input matInput formControlName="fullName" autocomplete="name" />
+                @if (message('fullName', 'Full name'); as msg) { <mat-error>{{ msg }}</mat-error> }
+              </mat-form-field>
 
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Email</mat-label>
-              <input matInput type="email" formControlName="email" />
-              @if (fieldError('email'); as msg) { <mat-error>{{ msg }}</mat-error> }
-            </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Email</mat-label>
+                <input matInput type="email" formControlName="email" autocomplete="email" />
+                @if (message('email', 'Email'); as msg) { <mat-error>{{ msg }}</mat-error> }
+              </mat-form-field>
 
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Password</mat-label>
-              <input matInput type="password" formControlName="password" />
-              @if (fieldError('password'); as msg) { <mat-error>{{ msg }}</mat-error> }
-            </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Password</mat-label>
+                <input matInput type="password" formControlName="password" autocomplete="new-password" />
+                <mat-hint>{{ passwordRule }}</mat-hint>
+                @if (message('password', 'Password'); as msg) { <mat-error>{{ msg }}</mat-error> }
+              </mat-form-field>
 
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Confirm password</mat-label>
-              <input matInput type="password" formControlName="confirmPassword" />
-              @if (form.errors?.['mismatch'] && form.get('confirmPassword')?.touched) {
-                <mat-error>Those passwords don't match.</mat-error>
+              <mat-form-field appearance="outline">
+                <mat-label>Confirm password</mat-label>
+                <input matInput type="password" formControlName="confirmPassword" autocomplete="new-password" />
+                @if (mismatch()) { <mat-error>Those passwords don't match.</mat-error> }
+              </mat-form-field>
+
+              @if (banner()) {
+                <p class="notice notice--danger" role="alert">
+                  <mat-icon>error_outline</mat-icon>
+                  <span>{{ banner() }}</span>
+                </p>
               }
-            </mat-form-field>
 
-            <button mat-flat-button color="primary" type="submit" [disabled]="form.invalid || submitting()">
-              Register
-            </button>
-          </form>
-        </mat-card-content>
-      </mat-card>
-    }
+              <button mat-flat-button color="primary" type="submit" [disabled]="submitting()">
+                @if (submitting()) { <mat-spinner diameter="20"></mat-spinner> } @else { Register }
+              </button>
+            </form>
+          </mat-card-content>
+        </mat-card>
+      }
+    </div>
   `,
   styles: [`
-    .form-card { max-width: 460px; margin: 1rem 0; }
-    .full-width { width: 100%; }
-    form { display: flex; flex-direction: column; gap: 0.25rem; }
+    .form-page { max-width: 28rem; margin: clamp(0.5rem, 3vw, 2rem) auto; }
+    .form-card { width: 100%; }
+    form { display: flex; flex-direction: column; gap: 0.5rem; }
+    form button[type="submit"] { margin-top: 0.5rem; }
+    .badge {
+      display: grid; place-items: center; width: 48px; height: 48px; border-radius: 999px;
+      background: var(--warning-wash); color: var(--warning-text); margin-bottom: 0.75rem;
+    }
   `]
 })
 export class RegisterTeacherComponent {
+  readonly passwordRule = PASSWORD_RULE;
+
   submitting = signal(false);
-  problem = signal<ProblemDetails | null>(null);
+  banner = signal<string | null>(null);
   done = signal(false);
 
   private fb = inject(FormBuilder);
@@ -88,20 +109,28 @@ export class RegisterTeacherComponent {
     confirmPassword: ['', [Validators.required]]
   }, { validators: passwordsMatch });
 
-  fieldError(name: string): string | null {
-    return this.problem()?.errors?.[name]?.[0] ?? null;
+  message(name: string, label: string): string | null {
+    return fieldMessage(this.form, name, label, name === 'password' ? { pattern: PASSWORD_RULE, minlength: PASSWORD_RULE } : {});
+  }
+
+  mismatch(): boolean {
+    const confirm = this.form.get('confirmPassword');
+    return !!this.form.errors?.['mismatch'] && !!(confirm?.touched || confirm?.dirty);
   }
 
   async submit(): Promise<void> {
-    if (this.form.invalid) return;
+    if (this.form.invalid) {
+      revealErrors(this.form);
+      return;
+    }
     this.submitting.set(true);
-    this.problem.set(null);
+    this.banner.set(null);
     try {
       const { fullName, email, password } = this.form.getRawValue();
       await this.auth.registerTeacher(fullName!, email!, password!);
       this.done.set(true);
     } catch (err) {
-      this.problem.set(problemFrom(err));
+      this.banner.set(applyServerErrors(this.form, problemFrom(err)));
     } finally {
       this.submitting.set(false);
     }

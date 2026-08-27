@@ -35,30 +35,94 @@ $web-theme: mat.define-theme((
   --warning: #B4741A;          // 3.6:1 — chip/border FILL ONLY, never a sentence
   --ink: #1F2937;              // on top of --tertiary / --warning fills (4.8:1+)
   --border: #E4DFD5;
+
+  // Derived surfaces — tints of the tokens above, never new hues. These are backgrounds only,
+  // so the measured text ratios in the table stay the contract they were written to be.
+  --paper: #FFFFFF;            // cards and tables sit a shade above the page
+  --paper-sunk: #F3F0E9;       // table headers, the drawer, inset strips
+  --rule: #EDE8DE;             // hairline between rows
+  --primary-wash: #EEF1F7;     // the current page in the nav, quiet primary fills
+  --danger-wash: #FBEEEC;
+  --success-wash: #ECF3EF;
+  --warning-wash: #FBF3E4;
+
+  // Role coding (plan §8) — slate / indigo / teal, warmed onto this palette so a three-login
+  // demo stays legible without three cool hues fighting the paper. Ratios are chip ink on chip
+  // fill: admin 6.6:1, teacher 8.5:1, student 5.7:1.
+  --role-admin-bg: var(--paper-sunk);
+  --role-admin-ink: #4B5563;
+  --role-teacher-bg: var(--primary-wash);
+  --role-teacher-ink: var(--primary);
+  --role-student-bg: #DCEBE6;
+  --role-student-ink: #1F6357;
+
+  // Type scale — fluid, so a phone and a projector both get sensible sizes.
+  --step--1: 0.8125rem;                             // 13px captions and column labels
+  --step-0: 0.9375rem;                              // 15px body and tables (plan §8)
+  --step-1: 1.0625rem;
+  --step-2: clamp(1.25rem, 1.1rem + 0.7vw, 1.5rem);
+  --step-3: clamp(1.5rem, 1.25rem + 1.2vw, 2rem);
+  --step-4: clamp(1.875rem, 1.4rem + 2.4vw, 3rem);
+
+  // Spacing, radius, elevation.
+  --gutter: clamp(1rem, 0.6rem + 2vw, 2rem);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow-1: 0 1px 2px rgba(31, 41, 55, 0.06);
+  --shadow-2: 0 6px 20px rgba(31, 41, 55, 0.10);
 }
 
+*, *::before, *::after { box-sizing: border-box; }
+
 html, body { height: 100%; }
+html { -webkit-text-size-adjust: 100%; }
 
 body {
   margin: 0;
   background: var(--surface);
   color: var(--ink);
   font-family: 'Inter', "Helvetica Neue", sans-serif;
-  font-size: 14px;
+  font-size: var(--step-0);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;             // nothing may push the page sideways on a phone
 }
 
 h1, h2, h3, h4, .app-heading {
-  font-family: 'Lora', serif;
+  font-family: 'Lora', Georgia, serif;
   font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--ink);
 }
 
-table, .tabular-nums {
-  font-variant-numeric: tabular-nums;
+h1 { font-size: var(--step-3); margin: 0 0 0.5rem; }
+h2 { font-size: var(--step-2); margin: 0 0 0.5rem; }
+h3 { font-size: var(--step-1); margin: 0 0 0.25rem; }
+p { margin: 0 0 0.75rem; }
+
+img, svg, video, iframe { max-width: 100%; }
+
+table, .tabular-nums { font-variant-numeric: tabular-nums; }
+
+// Focus is never removed — it is drawn properly (plan §8, accessibility).
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
-.state-empty, .state-error {
-  color: var(--muted);
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
+
+// ---- Text roles ------------------------------------------------------------
+.state-empty, .state-error { color: var(--muted); }
 
 .text-danger { color: var(--danger); }
 .text-success { color: var(--success); }
@@ -66,15 +130,158 @@ table, .tabular-nums {
 .text-tertiary { color: var(--tertiary-text); }
 .text-muted { color: var(--muted); }
 
-.chip-fill-tertiary {
-  background: var(--tertiary);
-  color: var(--ink);
-}
-.chip-fill-warning {
-  background: var(--warning);
-  color: var(--ink);
+.chip-fill-tertiary { background: var(--tertiary); color: var(--ink); }
+.chip-fill-warning { background: var(--warning); color: var(--ink); }
+
+// The utility face: small, letterspaced Inter for eyebrows, column labels and metadata. It is
+// the third type role the plan asks for, and it keeps headings from doing two jobs at once.
+.eyebrow {
+  display: block;
+  font-size: var(--step--1);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
 }
 
+// Present for a screen reader, absent for everything else — used on the header cells of the
+// action columns, which have a job but no visible title.
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+// The measure every page is written to: wide enough for a four-column table, narrow enough
+// that a paragraph stays readable, with a gutter that opens up as the screen does.
+.app-content {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: clamp(1rem, 3vw, 2rem) var(--gutter) 4rem;
+}
+
+// ---- Page head -------------------------------------------------------------
+// A heading sits on a hairline that runs the width of the content — the ruled line of an
+// exercise book. Actions ride the same line on a desktop and stack beneath it on a phone.
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  padding-bottom: 0.75rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.page-head__text { min-width: min(100%, 16rem); }
+.page-head h1, .page-head h2 { margin: 0; }
+.page-head__sub { margin: 0.25rem 0 0; color: var(--muted); font-size: var(--step--1); }
+.page-head__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+@media (max-width: 560px) {
+  .page-head__actions { width: 100%; }
+  .page-head__actions > * { flex: 1 1 auto; }
+}
+
+// ---- Notices: an error you cannot scroll past ------------------------------
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--muted);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  margin: 0 0 1rem;
+  font-size: var(--step--1);
+}
+.notice p { margin: 0; }
+.notice__title { font-weight: 600; }
+.notice .mat-icon { flex: none; width: 20px; height: 20px; font-size: 20px; }
+.notice--danger { border-left-color: var(--danger); background: var(--danger-wash); color: var(--danger); }
+.notice--success { border-left-color: var(--success); background: var(--success-wash); color: var(--success); }
+.notice--warning { border-left-color: var(--warning); background: var(--warning-wash); color: var(--warning-text); }
+
+// ---- Tables ----------------------------------------------------------------
+// Wide by nature. On a desktop they scroll inside their own box rather than the page; below
+// 720px each row becomes a labelled card, so a phone never gets a sideways-scrolling grid.
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: var(--shadow-1);
+}
+
+.data-table {
+  width: 100%;
+  background: transparent;
+  font-size: var(--step-0);
+}
+.data-table .mat-mdc-header-row { background: var(--paper-sunk); }
+.data-table .mat-mdc-header-cell {
+  font-size: var(--step--1);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.data-table .mat-mdc-row:hover { background: var(--primary-wash); }
+.data-table .mat-mdc-cell, .data-table .mat-mdc-header-cell { border-bottom-color: var(--rule); }
+.data-table .mat-mdc-row:last-child .mat-mdc-cell { border-bottom: 0; }
+
+@media (max-width: 720px) {
+  .table-wrap { border: 0; background: transparent; box-shadow: none; overflow-x: visible; }
+  .data-table, .data-table tbody, .data-table tr, .data-table td { display: block; width: 100%; }
+  .data-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  .data-table .mat-mdc-row {
+    height: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--paper);
+    box-shadow: var(--shadow-1);
+    margin-bottom: 0.75rem;
+    padding: 0.25rem 0.9rem;
+  }
+  .data-table .mat-mdc-row:hover { background: var(--paper); }
+
+  .data-table .mat-mdc-cell {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.6rem 0;
+    text-align: right;
+    border-bottom: 1px solid var(--rule);
+    min-height: 0;
+  }
+  // The column heading moves into the row, so a stacked card still says what each value is.
+  .data-table .mat-mdc-cell::before {
+    content: attr(data-label);
+    flex: none;
+    text-align: left;
+    font-size: var(--step--1);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  // Action and control cells carry no label, so they take the full width instead of a gutter.
+  .data-table .mat-mdc-cell[data-label=""] { justify-content: flex-end; flex-wrap: wrap; }
+  .data-table .mat-mdc-cell[data-label=""]::before { content: none; }
+  .data-table .mat-mdc-row .mat-mdc-cell:last-of-type { border-bottom: 0; }
+}
+
+// ---- Material component alignment -----------------------------------------
 :root {
   @include mat.all-component-themes($web-theme);
 }
@@ -98,9 +305,45 @@ table, .tabular-nums {
   color: var(--primary);
 }
 
+.mat-mdc-button-base {
+  letter-spacing: 0.01em;
+  font-weight: 500;
+  border-radius: 999px;
+}
+
 a { color: var(--primary); }
+a:hover { text-decoration-thickness: 2px; }
 
 .mat-mdc-card {
-  background: #fff;
+  // MDC paints the card from its own token, so setting `background` alone leaves M3's tinted
+  // surface showing through and the card reads grey against the paper.
+  --mdc-elevated-card-container-color: var(--paper);
+  --mdc-outlined-card-container-color: var(--paper);
+  background: var(--paper);
   border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
 }
+.mat-mdc-card-title { font-family: 'Lora', Georgia, serif; }
+// An outlined field draws its floating label ~7px ABOVE its own box, and Material leaves the
+// card header no bottom padding — so the label of the first field lands on the card title.
+// Qualifying the selector matters: Material injects the card's own stylesheet into <head> after
+// this one, so a bare `.mat-mdc-card-header` loses the cascade at equal specificity and the
+// padding never applied. 1rem clears the label's overhang and still leaves a visible gap.
+.mat-mdc-card .mat-mdc-card-header { padding-bottom: 1rem; }
+
+// Form fields sit on paper so a card and its inputs read as one object.
+.mat-mdc-form-field { width: 100%; }
+.mat-mdc-text-field-wrapper { background: var(--paper); border-radius: var(--radius-sm); }
+.mat-mdc-form-field-error { font-size: var(--step--1); }
+.mat-mdc-form-field-subscript-wrapper { font-size: var(--step--1); }
+
+// Toasts render in the CDK overlay, outside every component, so their skin lives here.
+.toast .mdc-snackbar__surface {
+  border-radius: var(--radius-sm) !important;
+  box-shadow: var(--shadow-2);
+}
+.toast-error .mdc-snackbar__surface { background: var(--danger) !important; }
+.toast-success .mdc-snackbar__surface { background: var(--success) !important; }
+.toast .mdc-snackbar__label { color: #fff !important; font-size: var(--step-0); }
+.toast .mat-mdc-snack-bar-action { color: #fff !important; font-weight: 600; }

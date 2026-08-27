@@ -48,9 +48,20 @@ export class AuthService {
     await firstValueFrom(this.http.post('/api/auth/register/student', { fullName, email, password }));
   }
 
-  async logout(): Promise<void> {
-    await firstValueFrom(this.http.post('/api/auth/logout', {}));
+  /** Drops the session this tab knows about. Called on sign-out, and by the error interceptor
+   * when the server says a request was unauthenticated. */
+  clearSession(): void {
     this._me.set(null);
+  }
+
+  async logout(): Promise<void> {
+    try {
+      await firstValueFrom(this.http.post('/api/auth/logout', {}));
+    } finally {
+      // Whether or not the server heard us, this tab is signed out. Leaving someone apparently
+      // signed in because the network dropped is the worse of the two failures.
+      this.clearSession();
+    }
   }
 
   async refreshMe(): Promise<void> {

@@ -1,37 +1,45 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { StatePanelComponent } from '../../shared/state-panel.component';
 import { MediaEmbedComponent } from '../../shared/media-embed.component';
+import { ReleaseRailComponent } from '../../shared/release-rail.component';
 import { PagedResult, ProblemDetails, StudentLessonWithMark } from '../../core/models';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
 
 @Component({
   selector: 'app-course-lessons',
   standalone: true,
-  imports: [DatePipe, RouterLink, MatCardModule, MatIconModule, MatExpansionModule, StatePanelComponent, MediaEmbedComponent],
+  imports: [
+    DatePipe, RouterLink, MatIconModule, MatExpansionModule, StatePanelComponent,
+    MediaEmbedComponent, ReleaseRailComponent
+  ],
   template: `
     <a routerLink="/student/courses" class="back-link"><mat-icon inline>arrow_back</mat-icon> Back to courses</a>
 
     <app-state-panel [loading]="loading()" [error]="error()" [empty]="(rows()?.length ?? 0) === 0"
+      emptyIcon="menu_book" (retry)="load()"
       emptyMessage="Your teacher hasn't opened anything here yet.">
       <mat-accordion multi>
         @for (item of rows(); track item.lesson.id) {
-          <mat-expansion-panel>
+          <mat-expansion-panel class="lesson">
             <mat-expansion-panel-header>
-              <mat-panel-title>{{ item.lesson.title }}</mat-panel-title>
-              <mat-panel-description>
+              <mat-panel-title class="lesson__title">{{ item.lesson.title }}</mat-panel-title>
+              <mat-panel-description class="lesson__desc">
                 @if (item.score !== null) {
-                  <span [class]="item.passed ? 'text-success' : 'text-danger'">
+                  <span class="verdict" [class]="item.passed ? 'text-success' : 'text-danger'">
+                    <mat-icon inline>{{ item.passed ? 'check_circle' : 'cancel' }}</mat-icon>
                     {{ item.score }} / {{ item.lesson.quizMaxScore }} — {{ item.passed ? 'Passed' : 'Failed' }}
                   </span>
                 }
               </mat-panel-description>
             </mat-expansion-panel-header>
+
+            <!-- What has opened, and what has not yet, before anything else. -->
+            <app-release-rail [lesson]="item.lesson"></app-release-rail>
 
             <app-media-embed [url]="item.lesson.recordingUrl"></app-media-embed>
 
@@ -57,8 +65,21 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
   `,
   styles: [`
     .back-link { display: inline-flex; align-items: center; gap: 0.3rem; text-decoration: none; margin-bottom: 1rem; }
-    .links { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem; }
+    .lesson { margin-bottom: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius) !important; }
+    .lesson__title { font-family: 'Lora', Georgia, serif; font-weight: 600; }
+    .lesson__desc { justify-content: flex-end; flex-grow: 0; }
+    .verdict { display: inline-flex; align-items: center; gap: 0.25rem; white-space: nowrap; }
+    app-release-rail { display: block; margin-bottom: 1.25rem; }
+    .links {
+      display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem;
+      padding-top: 1rem; border-top: 1px solid var(--rule);
+    }
     .links a, .links span { display: inline-flex; align-items: center; gap: 0.25rem; text-decoration: none; }
+    .links a { font-weight: 500; }
+    @media (max-width: 560px) {
+      /* The score would otherwise squeeze the lesson title down to an ellipsis. */
+      .lesson__desc { display: none; }
+    }
   `]
 })
 export class CourseLessonsComponent implements OnInit {
@@ -67,13 +88,14 @@ export class CourseLessonsComponent implements OnInit {
   rows = signal<StudentLessonWithMark[] | null>(null);
 
   private teacherId!: string;
-
-  constructor(private http: HttpClient, private route: ActivatedRoute) {}
+  private http = inject(HttpClient);
+  private route = inject(ActivatedRoute);
 
   ngOnInit(): void {
     this.teacherId = this.route.snapshot.paramMap.get('teacherId')!;
     this.load();
-    this.http.post(`/api/student/courses/${this.teacherId}/seen`, {}).subscribe();
+    // Marking the course seen is housekeeping — if it fails, nothing on this screen is wrong.
+    this.http.post(`/api/student/courses/${this.teacherId}/seen`, {}).subscribe({ error: () => {} });
   }
 
   load(): void {
