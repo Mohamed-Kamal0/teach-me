@@ -57,7 +57,7 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
               </p>
             }
 
-            <button mat-flat-button color="primary" type="submit" [disabled]="submitting()">
+            <button mat-flat-button color="primary" type="submit" [disabled]="submitting() || form.invalid">
               @if (submitting()) { <app-busy-ring size="20px"></app-busy-ring> } @else { Sign in }
             </button>
           </form>
@@ -117,7 +117,8 @@ export class LoginComponent implements OnInit {
     // second press of a button that appears to work does nothing at all.
     clearServerErrors(this.form);
 
-    // Rather than a disabled button that explains nothing, the unmet rules are made to speak.
+    // The button is disabled until both boxes hold something and the email parses, so this is a
+    // backstop rather than the usual path — and when it does fire it makes the unmet rules speak.
     if (this.form.invalid) {
       revealErrors(this.form);
       return;

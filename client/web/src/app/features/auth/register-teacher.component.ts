@@ -97,7 +97,7 @@ function passwordsMatch(control: AbstractControl): ValidationErrors | null {
                 </p>
               }
 
-              <button mat-flat-button color="primary" type="submit" [disabled]="submitting()">
+              <button mat-flat-button color="primary" type="submit" [disabled]="submitting() || form.invalid">
                 @if (submitting()) { <app-busy-ring size="20px"></app-busy-ring> } @else { Register }
               </button>
             </form>

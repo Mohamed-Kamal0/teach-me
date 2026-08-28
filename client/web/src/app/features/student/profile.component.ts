@@ -175,7 +175,8 @@ function formatIsoDate(value: Date | null): string | null {
                       </p>
                     }
 
-                    <button mat-flat-button color="primary" type="submit" [disabled]="saving()">
+                    <button mat-flat-button color="primary" type="submit"
+                      [disabled]="saving() || form.invalid || !changed()">
                       @if (saving()) { <app-busy-ring size="20px"></app-busy-ring> } @else { Save changes }
                     </button>
                   </form>
@@ -332,6 +333,21 @@ export class ProfileComponent implements OnInit {
 
   bioLength(): number {
     return (this.form.get('bio')?.value ?? '').length;
+  }
+
+  /** Nothing to save until a box differs from the copy the server sent back — the same rule the
+   *  Subject card follows. Compared value by value rather than through `dirty`, so opening the
+   *  calendar and re-picking the day already on file, or typing into a box and undoing it, leaves
+   *  the button off. Trimmed on the way in, because the server stores it trimmed and a trailing
+   *  space is not an edit. */
+  changed(): boolean {
+    const stored = this.profile();
+    if (!stored) return false;
+    const { displayName, phone, dateOfBirth, bio } = this.form.getRawValue();
+    return (displayName ?? '').trim() !== (stored.displayName ?? '')
+      || (phone ?? '').trim() !== (stored.phone ?? '')
+      || formatIsoDate(dateOfBirth) !== (stored.dateOfBirth ?? null)
+      || (bio ?? '').trim() !== (stored.bio ?? '');
   }
 
   save(): void {
