@@ -8,6 +8,7 @@ export interface MeResponse {
   role: UserRole;
   teacherStatus: TeacherStatus | null;
   teacherDecidedAtUtc: string | null;
+  photoETag: string | null;
 }
 
 export interface LoginResponse {
@@ -45,6 +46,7 @@ export interface TeacherSummary {
   status: TeacherStatus;
   createdAtUtc: string;
   decidedAtUtc: string | null;
+  photoETag: string | null;
 }
 
 export interface Lesson {
@@ -89,6 +91,7 @@ export interface StudentSummary {
   fullName: string;
   email: string;
   joinedAtUtc: string;
+  photoETag: string | null;
 }
 
 export interface TeacherStudentsResponse {
@@ -113,12 +116,14 @@ export interface StudentGradeDetail {
   userId: string;
   fullName: string;
   email: string;
+  photoETag: string | null;
   marks: LessonMark[];
 }
 
 export interface ProgressRow {
   studentUserId: string;
   fullName: string;
+  photoETag: string | null;
   lessonsMarked: number;
   totalLessons: number;
   passedCount: number;
@@ -139,6 +144,7 @@ export interface Profile {
   displayName: string | null;
   phone: string | null;
   bio: string | null;
+  photoETag: string | null;
   courses: CourseMembership[];
 }
 

@@ -6,4 +6,5 @@ public record TeacherSummaryDto(
     string Email,
     string Status,
     DateTimeOffset CreatedAtUtc,
-    DateTimeOffset? DecidedAtUtc);
+    DateTimeOffset? DecidedAtUtc,
+    string? PhotoETag);

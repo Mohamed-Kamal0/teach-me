@@ -8,6 +8,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
 import { StatePanelComponent } from '../../shared/state-panel.component';
+import { AvatarComponent } from '../../shared/avatar.component';
 import { LessonMark, ProblemDetails, StudentGradeDetail } from '../../core/models';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
 import { NotifyService } from '../../core/notify.service';
@@ -17,7 +18,7 @@ import { NotifyService } from '../../core/notify.service';
   standalone: true,
   imports: [
     RouterLink, MatTableModule, MatButtonModule, MatIconModule, MatFormFieldModule,
-    MatInputModule, FormsModule, StatePanelComponent
+    MatInputModule, FormsModule, StatePanelComponent, AvatarComponent
   ],
   template: `
     <a routerLink="/teacher/students" class="back-link"><mat-icon inline>arrow_back</mat-icon> Back to students</a>
@@ -25,6 +26,7 @@ import { NotifyService } from '../../core/notify.service';
     <app-state-panel [loading]="loading()" [error]="error()" (retry)="load()">
       @if (data(); as d) {
         <div class="page-head">
+          <app-avatar size="lg" [userId]="d.userId" [name]="d.fullName" [photoETag]="d.photoETag"></app-avatar>
           <div class="page-head__text">
             <span class="eyebrow">Student</span>
             <h1 class="app-heading">{{ d.fullName }}</h1>
@@ -85,6 +87,7 @@ import { NotifyService } from '../../core/notify.service';
   `,
   styles: [`
     .back-link { display: inline-flex; align-items: center; gap: 0.3rem; text-decoration: none; margin-bottom: 1rem; }
+    .page-head { align-items: center; }
     .cell-title { font-weight: 500; }
     .score-field { width: 5.5rem; }
     .score-of { margin-left: 0.4rem; color: var(--muted); }

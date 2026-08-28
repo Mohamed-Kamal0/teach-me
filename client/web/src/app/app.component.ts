@@ -6,10 +6,13 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSidenavModule } from '@angular/material/sidenav';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { routeFade } from './app.animations';
 import { AuthService } from './core/auth.service';
 import { NotifyService } from './core/notify.service';
 import { HelperWidgetComponent } from './features/helper/helper-widget.component';
 import { ServerDownComponent } from './shared/server-down.component';
+import { AvatarComponent } from './shared/avatar.component';
 
 /** A destination in the app bar. The icon is the one the plan assigns to that concept, so the
  * drawer and the bar name the same thing the same way. */
@@ -24,10 +27,12 @@ export interface NavLink {
   standalone: true,
   imports: [
     RouterOutlet, RouterLink, RouterLinkActive, MatToolbarModule, MatButtonModule, MatIconModule,
-    MatMenuModule, MatSidenavModule, HelperWidgetComponent, ServerDownComponent
+    MatMenuModule, MatSidenavModule, MatTooltipModule, HelperWidgetComponent, ServerDownComponent,
+    AvatarComponent
   ],
   templateUrl: './app.component.html',
-  styleUrl: './app.component.scss'
+  styleUrl: './app.component.scss',
+  animations: [routeFade]
 })
 export class AppComponent {
   readonly auth = inject(AuthService);
@@ -36,6 +41,13 @@ export class AppComponent {
 
   /** The nav drawer, for widths where the links cannot sit in the bar. */
   readonly drawerOpen = signal(false);
+
+  /** Drives the page cross-fade: a new value on every navigation runs the `routeFade` transition.
+   * Held constant when the reader asked for less motion, so no transition ever fires. */
+  readonly routeKey = signal('');
+
+  private readonly reduceMotion =
+    typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   readonly links = computed<NavLink[]>(() => {
     const me = this.auth.me();
@@ -70,8 +82,20 @@ export class AppComponent {
   constructor() {
     // A drawer left open across a navigation covers the page it just opened.
     this.router.events
-      .pipe(filter(event => event instanceof NavigationEnd))
-      .subscribe(() => this.drawerOpen.set(false));
+      .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
+      .subscribe(event => {
+        this.drawerOpen.set(false);
+        if (!this.reduceMotion) this.routeKey.set(event.urlAfterRedirects.split('?')[0]);
+      });
+  }
+
+  /** Where the account menu's "Profile" link points, or null for roles without a profile page. */
+  get profilePath(): string | null {
+    switch (this.auth.role()) {
+      case 'Student': return '/student/profile';
+      case 'Teacher': return '/teacher/profile';
+      default: return null;
+    }
   }
 
   roleChipClass(): string {
@@ -80,6 +104,17 @@ export class AppComponent {
       case 'Teacher': return 'chip-teacher';
       case 'Student': return 'chip-student';
       default: return '';
+    }
+  }
+
+  /** The glyph the role badge wears. Distinct from any nav icon, so the badge is not mistaken
+   * for a destination. */
+  roleIcon(): string {
+    switch (this.auth.role()) {
+      case 'Admin': return 'shield_person';
+      case 'Teacher': return 'co_present';
+      case 'Student': return 'person';
+      default: return 'person';
     }
   }
 

@@ -16,6 +16,10 @@ public class MeController(AppDbContext db, ICurrentUser currentUser) : Controlle
     {
         var user = await db.Users.FirstAsync(u => u.Id == currentUser.UserId, ct);
 
+        var photoETag = await db.Avatars.Where(a => a.UserId == user.Id)
+            .Select(a => a.ETag)
+            .FirstOrDefaultAsync(ct);
+
         string? teacherStatus = null;
         DateTimeOffset? teacherDecidedAtUtc = null;
         if (user.Role == UserRole.Teacher)
@@ -27,6 +31,6 @@ public class MeController(AppDbContext db, ICurrentUser currentUser) : Controlle
             teacherDecidedAtUtc = teacher.DecidedAtUtc;
         }
 
-        return Ok(new MeResponse(user.Id, user.Email, user.FullName, user.Role.ToString(), teacherStatus, teacherDecidedAtUtc));
+        return Ok(new MeResponse(user.Id, user.Email, user.FullName, user.Role.ToString(), teacherStatus, teacherDecidedAtUtc, photoETag));
     }
 }

@@ -6,6 +6,7 @@ import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { StatePanelComponent } from '../../shared/state-panel.component';
+import { AvatarComponent } from '../../shared/avatar.component';
 import { ProblemDetails, TeacherStudentsResponse } from '../../core/models';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
 import { NotifyService } from '../../core/notify.service';
@@ -13,7 +14,7 @@ import { NotifyService } from '../../core/notify.service';
 @Component({
   selector: 'app-students-list',
   standalone: true,
-  imports: [DatePipe, RouterLink, MatTableModule, MatButtonModule, MatIconModule, StatePanelComponent],
+  imports: [DatePipe, RouterLink, MatTableModule, MatButtonModule, MatIconModule, StatePanelComponent, AvatarComponent],
   template: `
     <div class="page-head">
       <div class="page-head__text">
@@ -47,7 +48,10 @@ import { NotifyService } from '../../core/notify.service';
         <table mat-table [dataSource]="data()?.students?.items ?? []" class="data-table">
           <ng-container matColumnDef="fullName">
             <th mat-header-cell *matHeaderCellDef>Name</th>
-            <td mat-cell *matCellDef="let row" data-label="Name" class="cell-name">{{ row.fullName }}</td>
+            <td mat-cell *matCellDef="let row" data-label="Name" class="cell-name">
+              <app-avatar size="sm" [userId]="row.userId" [name]="row.fullName" [photoETag]="row.photoETag"></app-avatar>
+              <span>{{ row.fullName }}</span>
+            </td>
           </ng-container>
           <ng-container matColumnDef="email">
             <th mat-header-cell *matHeaderCellDef>Email</th>
@@ -86,7 +90,7 @@ import { NotifyService } from '../../core/notify.service';
       color: var(--tertiary-text);
     }
     .join-code__note { margin: 0.25rem 0 0; color: var(--muted); font-size: var(--step--1); }
-    .cell-name { font-weight: 500; }
+    .cell-name { font-weight: 500; display: flex; align-items: center; gap: 0.6rem; }
     .cell-email { word-break: break-all; }
   `]
 })

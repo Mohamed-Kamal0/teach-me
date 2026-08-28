@@ -22,6 +22,17 @@ public class ApiExceptionMiddleware(RequestDelegate next, ILogger<ApiExceptionMi
         {
             await WriteProblem(context, StatusCodes.Status409Conflict, ex.Message, null);
         }
+        catch (BadHttpRequestException ex)
+        {
+            // Kestrel/TestServer raises this for a malformed request or one that breaches a body-size
+            // limit (e.g. [RequestSizeLimit]). Surface its own status — 413 for an oversized upload —
+            // rather than letting it fall through to a blanket 500.
+            var status = ex.StatusCode is >= 400 and < 500 ? ex.StatusCode : StatusCodes.Status400BadRequest;
+            var title = status == StatusCodes.Status413PayloadTooLarge
+                ? "That upload is too large."
+                : "The request could not be read.";
+            await WriteProblem(context, status, title, null);
+        }
         catch (Exception ex)
         {
             logger.LogError(ex, "Unhandled exception");

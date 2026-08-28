@@ -7,6 +7,7 @@ public record CourseMembershipDto(Guid TeacherUserId, string TeacherFullName, Da
 public record ProfileDto(
     Guid UserId, string Email, string FullName,
     string? DisplayName, string? Phone, string? Bio,
+    string? PhotoETag,
     List<CourseMembershipDto> Courses);
 
 public record ProfileUpdateRequest(

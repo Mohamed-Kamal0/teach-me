@@ -43,6 +43,7 @@ builder.Services.AddScoped<IPasswordHasher<TeachersLessons.Api.Domain.User>, Pas
 
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 builder.Services.AddSingleton<TeachersLessons.Api.Features.Helper.IHelperIntentProvider, TeachersLessons.Api.Features.Helper.HelperIntentProvider>();
+builder.Services.AddSingleton<IAvatarImageProcessor, AvatarImageProcessor>();
 
 // Always in every environment that actually terminates TLS; SameAsRequest only so `dotnet run`
 // over plain http in local dev doesn't refuse to set the cookie at all.

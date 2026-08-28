@@ -1,6 +1,9 @@
 <mat-sidenav-container class="shell" [hasBackdrop]="true">
   <mat-sidenav class="drawer" mode="over" [opened]="drawerOpen()" (closedStart)="drawerOpen.set(false)">
     <div class="drawer__head">
+      @if (auth.me(); as me) {
+        <app-avatar class="drawer__avatar" size="lg" [userId]="me.userId" [name]="me.fullName" [photoETag]="me.photoETag"></app-avatar>
+      }
       <span class="eyebrow">Signed in as</span>
       <p class="drawer__name">{{ auth.me()?.fullName }}</p>
       <p class="drawer__email">{{ auth.me()?.email }}</p>
@@ -36,7 +39,16 @@
 
       @if (auth.bootstrapped()) {
         @if (auth.isAuthenticated()) {
-          <span class="role-chip" [class]="roleChipClass()">{{ auth.role() }}</span>
+          <!-- The role as a badge: the glyph carries it in the bar, the word stays available
+               to a screen reader and on hover. -->
+          <span
+            class="role-badge"
+            [class]="roleChipClass()"
+            [matTooltip]="auth.role() ?? ''"
+            [attr.aria-label]="'Signed in as ' + auth.role()"
+          >
+            <mat-icon>{{ roleIcon() }}</mat-icon>
+          </span>
 
           <nav class="bar-nav" aria-label="Sections">
             @for (link of links(); track link.path) {
@@ -48,10 +60,25 @@
           </nav>
 
           <button mat-icon-button [matMenuTriggerFor]="menu" aria-label="Account menu">
-            <mat-icon>account_circle</mat-icon>
+            @if (auth.me(); as me) {
+              <app-avatar size="sm" [userId]="me.userId" [name]="me.fullName" [photoETag]="me.photoETag"></app-avatar>
+            } @else {
+              <mat-icon>account_circle</mat-icon>
+            }
           </button>
-          <mat-menu #menu="matMenu">
+          <mat-menu #menu="matMenu" class="account-menu">
             <div class="menu-email">{{ auth.me()?.email }}</div>
+            @if (profilePath) {
+              <a mat-menu-item [routerLink]="profilePath" class="menu-profile">
+                <!-- Their own face, not a generic glyph — the item leads to that photo. -->
+                @if (auth.me(); as me) {
+                  <app-avatar size="sm" [userId]="me.userId" [name]="me.fullName" [photoETag]="me.photoETag"></app-avatar>
+                } @else {
+                  <mat-icon>account_circle</mat-icon>
+                }
+                <span>Profile</span>
+              </a>
+            }
             <button mat-menu-item (click)="signOut()">
               <mat-icon>logout</mat-icon>
               <span>Sign out</span>
@@ -75,7 +102,7 @@
       }
     </mat-toolbar>
 
-    <main class="app-content">
+    <main class="app-content" [@routeFade]="routeKey()">
       @if (auth.serverUnreachable()) {
         <app-server-down></app-server-down>
       } @else {

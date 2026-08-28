@@ -3,13 +3,14 @@ import { HttpClient } from '@angular/common/http';
 import { MatTableModule } from '@angular/material/table';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { StatePanelComponent } from '../../shared/state-panel.component';
+import { AvatarComponent } from '../../shared/avatar.component';
 import { PagedResult, ProblemDetails, ProgressRow } from '../../core/models';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
 
 @Component({
   selector: 'app-progress',
   standalone: true,
-  imports: [MatTableModule, MatProgressBarModule, StatePanelComponent],
+  imports: [MatTableModule, MatProgressBarModule, StatePanelComponent, AvatarComponent],
   template: `
     <div class="page-head">
       <div class="page-head__text">
@@ -26,7 +27,10 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
         <table mat-table [dataSource]="rows() ?? []" class="data-table">
           <ng-container matColumnDef="fullName">
             <th mat-header-cell *matHeaderCellDef>Student</th>
-            <td mat-cell *matCellDef="let row" data-label="Student" class="cell-name">{{ row.fullName }}</td>
+            <td mat-cell *matCellDef="let row" data-label="Student" class="cell-name">
+              <app-avatar size="sm" [userId]="row.studentUserId" [name]="row.fullName" [photoETag]="row.photoETag"></app-avatar>
+              <span>{{ row.fullName }}</span>
+            </td>
           </ng-container>
           <ng-container matColumnDef="progress">
             <th mat-header-cell *matHeaderCellDef>Lessons marked</th>
@@ -53,7 +57,7 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
     </app-state-panel>
   `,
   styles: [`
-    .cell-name { font-weight: 500; }
+    .cell-name { font-weight: 500; display: flex; align-items: center; gap: 0.6rem; }
     .progress-cell { display: flex; align-items: center; gap: 0.75rem; min-width: 12rem; }
     .progress-cell mat-progress-bar { flex: 1; border-radius: 999px; }
     @media (max-width: 720px) {
