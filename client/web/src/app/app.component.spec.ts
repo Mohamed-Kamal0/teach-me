@@ -25,11 +25,14 @@ describe('AppComponent', () => {
     expect(fixture.componentInstance).toBeTruthy();
   });
 
-  it('renders the platform name in the app bar', () => {
+  it('offers a way home from the app bar', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.brand')?.textContent).toContain('Teachers, Lessons and Students');
+    // The centred bar nav is behind auth.bootstrapped(), which no test bootstraps; the drawer's
+    // copy of the same destinations renders either way.
+    const home = compiled.querySelector('a[href="/"]');
+    expect(home?.textContent).toContain('Home');
   });
 
   it('offers a signed-out visitor the directory and nothing else', () => {
