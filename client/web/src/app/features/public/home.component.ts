@@ -4,14 +4,15 @@ import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { StatePanelComponent } from '../../shared/state-panel.component';
-import { HomeResponse, ProblemDetails } from '../../core/models';
+import { TeacherCardComponent } from './teacher-card.component';
+import { CourseSummary, HomeResponse, PagedResult, ProblemDetails, PublicTeacher } from '../../core/models';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
 import { AuthService } from '../../core/auth.service';
 
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [RouterLink, MatButtonModule, MatIconModule, StatePanelComponent],
+  imports: [RouterLink, MatButtonModule, MatIconModule, StatePanelComponent, TeacherCardComponent],
   template: `
     <!-- The page reads top to bottom like a portfolio: an opening statement, then the three
          moments one under the next, then the numbers, then the way in. -->
@@ -72,6 +73,23 @@ import { AuthService } from '../../core/auth.service';
             <span class="stat__label">Lessons published</span>
           </div>
         </section>
+
+        <!-- The strip's number is the "Approved teachers" stat directly above it — the one
+             already in hand, not a second fetch, and not restated here either. -->
+        @if (teachers().length) {
+          <section class="meet reveal">
+            <h2 class="meet__title">Meet the teachers</h2>
+            <p class="meet__sub">A first look at who is teaching here.</p>
+            <div class="meet__grid">
+              @for (t of teachers(); track t.userId) {
+                <app-teacher-card [teacher]="t" [enrolled]="enrolledIds().has(t.userId)"></app-teacher-card>
+              }
+            </div>
+            <a mat-stroked-button routerLink="/teachers" class="meet__all">
+              Browse all teachers <mat-icon>arrow_forward</mat-icon>
+            </a>
+          </section>
+        }
 
         <p class="join reveal">
           <mat-icon>key</mat-icon>
@@ -218,6 +236,19 @@ import { AuthService } from '../../core/auth.service';
       color: var(--muted);
     }
 
+    /* ---- Meet the teachers ---------------------------------------------- */
+    .meet { max-width: 62rem; margin: 0.5rem auto 0; padding-top: 1.5rem; border-top: 1px solid var(--border); }
+    .meet__title { font-size: var(--step-2); margin: 0; }
+    .meet__sub { margin: 0.3rem 0 1.25rem; color: var(--muted); }
+    .meet__grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+      gap: 1rem;
+      align-items: stretch;
+      text-align: left;
+    }
+    .meet__all { margin-top: 1.25rem; }
+
     /* ---- The way in ----------------------------------------------------- */
     .join {
       display: flex;
@@ -250,12 +281,19 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
   error = signal<ProblemDetails | null>(null);
   data = signal<HomeResponse | null>(null);
 
+  /** The first three cards of the directory. A failure here leaves the strip out and the rest
+   *  of the page alone — the home page has never depended on it. */
+  teachers = signal<PublicTeacher[]>([]);
+  enrolledIds = signal<Set<string>>(new Set());
+
   private observer?: IntersectionObserver;
 
   constructor(private http: HttpClient) {}
 
   ngOnInit(): void {
     this.load();
+    this.loadTeachers();
+    this.loadEnrolments();
   }
 
   ngAfterViewInit(): void {
@@ -303,6 +341,27 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
         setTimeout(() => this.observeReveals());
       },
       error: (err) => { this.error.set(problemFrom(err)); this.loading.set(false); }
+    });
+  }
+
+  private loadTeachers(): void {
+    this.http.get<PagedResult<PublicTeacher>>('/api/public/teachers?page=1&pageSize=3').subscribe({
+      next: (res) => {
+        this.teachers.set(res.items);
+        setTimeout(() => this.observeReveals());
+      },
+      error: () => this.teachers.set([])
+    });
+  }
+
+  /** Which of those three a signed-in student is already on, so their cards open the course
+   *  instead of pointing at the joining code they clearly already used. */
+  private loadEnrolments(): void {
+    if (this.auth.role() !== 'Student') return;
+
+    this.http.get<CourseSummary[]>('/api/student/courses').subscribe({
+      next: (courses) => this.enrolledIds.set(new Set(courses.map(c => c.teacherUserId))),
+      error: () => this.enrolledIds.set(new Set())
     });
   }
 }

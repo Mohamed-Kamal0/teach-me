@@ -57,7 +57,11 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
         </mat-card-content>
       </mat-card>
 
-      <p class="alt">New here? <a routerLink="/register/teacher">Register as a teacher</a> or <a routerLink="/register/student">as a student</a>.</p>
+      <p class="alt">New here?</p>
+      <div class="alt__actions">
+        <a mat-stroked-button routerLink="/register/teacher">Register as a teacher</a>
+        <a mat-stroked-button routerLink="/register/student">Register as a student</a>
+      </div>
     </div>
   `,
   styles: [`
@@ -65,7 +69,9 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
     .form-card { width: 100%; }
     form { display: flex; flex-direction: column; gap: 0.25rem; }
     form button[type="submit"] { margin-top: 0.5rem; }
+    /* The prompt stays a sentence; the way out of it is a button. */
     .alt { margin-top: 1rem; color: var(--muted); font-size: var(--step--1); }
+    .alt__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
   `]
 })
 export class LoginComponent implements OnInit {

@@ -68,6 +68,10 @@ export class AvatarComponent implements OnChanges {
   @Input() photoETag: string | null = null;
   @Input() size: AvatarSize = 'md';
 
+  /** Overrides the photo route. The directory is read by people with no session, and the
+   *  authenticated /api/users/:id/photo route answers them 401. */
+  @Input() photoBase = '/api/users';
+
   /** Set when the <img> fails — a photo removed between the payload and the paint. */
   failed = false;
 
@@ -82,7 +86,7 @@ export class AvatarComponent implements OnChanges {
   }
 
   get src(): string {
-    return `/api/users/${this.userId}/photo?v=${encodeURIComponent(this.photoETag ?? '')}`;
+    return `${this.photoBase}/${this.userId}/photo?v=${encodeURIComponent(this.photoETag ?? '')}`;
   }
 
   get initials(): string {

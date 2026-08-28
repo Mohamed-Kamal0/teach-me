@@ -85,6 +85,14 @@
             </button>
           </mat-menu>
         } @else {
+          <nav class="bar-nav" aria-label="Sections">
+            @for (link of links(); track link.path) {
+              <a mat-button [routerLink]="link.path" routerLinkActive="is-current">
+                <mat-icon>{{ link.icon }}</mat-icon>
+                <span>{{ link.label }}</span>
+              </a>
+            }
+          </nav>
           <nav class="bar-nav" aria-label="Account">
             <a mat-button routerLink="/login">Sign in</a>
             <a mat-button routerLink="/register/teacher">Teacher sign-up</a>
@@ -94,6 +102,12 @@
             <mat-icon>more_vert</mat-icon>
           </button>
           <mat-menu #outMenu="matMenu">
+            @for (link of links(); track link.path) {
+              <a mat-menu-item [routerLink]="link.path">
+                <mat-icon>{{ link.icon }}</mat-icon>
+                <span>{{ link.label }}</span>
+              </a>
+            }
             <a mat-menu-item routerLink="/login">Sign in</a>
             <a mat-menu-item routerLink="/register/teacher">Teacher sign-up</a>
             <a mat-menu-item routerLink="/register/student">Student sign-up</a>

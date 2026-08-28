@@ -32,7 +32,8 @@ function passwordsMatch(control: AbstractControl): ValidationErrors | null {
             <span class="badge"><mat-icon>lock_clock</mat-icon></span>
             <h2 class="app-heading">Your account is waiting</h2>
             <p>Thanks for registering — an administrator will review your account before you can
-            teach here. <a routerLink="/login">Sign in</a> any time to check your standing.</p>
+            teach here. Sign in any time to check your standing.</p>
+            <a mat-flat-button color="primary" routerLink="/login">Sign in</a>
           </mat-card-content>
         </mat-card>
       } @else {
