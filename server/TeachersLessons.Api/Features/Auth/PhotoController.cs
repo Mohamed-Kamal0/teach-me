@@ -93,7 +93,35 @@ public class PhotoController(
     }
 
     [HttpGet("api/users/{userId:guid}/photo")]
-    public async Task<IActionResult> Get(Guid userId, CancellationToken ct)
+    public Task<IActionResult> Get(Guid userId, CancellationToken ct) =>
+        ServeAvatar(userId, "private, max-age=300", ct);
+
+    /// <summary>
+    /// The directory is read by people with no session, and the authenticated route above
+    /// answers them 401. Rather than open that route to every user id, this one asks the
+    /// question in the query: the authorisation is "is this an approved teacher", not a claim.
+    /// </summary>
+    [HttpGet("api/public/teachers/{userId:guid}/photo")]
+    [AllowAnonymous]
+    public async Task<IActionResult> PublicTeacherPhoto(Guid userId, CancellationToken ct)
+    {
+        var isPublicTeacher = await db.Teachers
+            .AnyAsync(t => t.UserId == userId && t.Status == TeacherStatus.Approved, ct);
+
+        if (!isPublicTeacher)
+        {
+            // "No photo" and "not a public teacher" answer identically — nothing here tells a
+            // caller whether a given id is a person at all.
+            return NotFound();
+        }
+
+        // A teacher's directory photo is fine in a shared cache; a student's is not, which is
+        // the one thing that differs between the two callers.
+        return await ServeAvatar(userId, "public, max-age=300", ct);
+    }
+
+    /// <summary>The caching contract — ETag, If-None-Match → 304, nosniff — written once.</summary>
+    private async Task<IActionResult> ServeAvatar(Guid userId, string cacheControl, CancellationToken ct)
     {
         var avatar = await db.Avatars
             .Where(a => a.UserId == userId)
@@ -107,7 +135,7 @@ public class PhotoController(
             return NotFound();
         }
 
-        Response.Headers[HeaderNames.CacheControl] = "private, max-age=300";
+        Response.Headers[HeaderNames.CacheControl] = cacheControl;
         Response.Headers[HeaderNames.ETag] = avatar.ETag;
         Response.Headers["X-Content-Type-Options"] = "nosniff";
 

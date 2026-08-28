@@ -33,8 +33,15 @@ public class StudentsController(AppDbContext db, ICurrentUser currentUser) : Con
         return Ok(new TeacherStudentsResponse(joinCode, new PagedResult<StudentSummaryDto> { Items = items, Page = p, PageSize = ps, Total = total }));
     }
 
+    /// <summary>
+    /// Three isolation rules hold here and must survive any later edit: a student the caller
+    /// never enrolled is a 404 and not a 403 (no existence oracle); the marks are filtered by
+    /// the caller's own lessons, so a student on two courses shows each teacher only their own;
+    /// and TotalLessons counts the caller's lessons only, so the denominator cannot leak the
+    /// size of another teacher's course.
+    /// </summary>
     [HttpGet("{studentId:guid}")]
-    public async Task<ActionResult<StudentGradeDetailDto>> Detail(Guid studentId, CancellationToken ct)
+    public async Task<ActionResult<StudentProfileDto>> Detail(Guid studentId, CancellationToken ct)
     {
         var teacherId = currentUser.UserId;
 
@@ -44,6 +51,10 @@ public class StudentsController(AppDbContext db, ICurrentUser currentUser) : Con
             {
                 e.Student.User.FullName,
                 e.Student.User.Email,
+                e.Student.DisplayName,
+                e.Student.Phone,
+                e.Student.Bio,
+                e.JoinedAtUtc,
                 PhotoETag = db.Avatars.Where(a => a.UserId == studentId).Select(a => a.ETag).FirstOrDefault()
             })
             .FirstOrDefaultAsync(ct);
@@ -61,6 +72,14 @@ public class StudentsController(AppDbContext db, ICurrentUser currentUser) : Con
                 m.Score, m.Score >= m.Lesson.PassMark, m.RecordedAtUtc, m.UpdatedAtUtc, m.Id))
             .ToListAsync(ct);
 
-        return Ok(new StudentGradeDetailDto(studentId, enrollment.FullName, enrollment.Email, enrollment.PhotoETag, marks));
+        // Counted the way ProgressController counts it, so "3 of 8 marked" here and the progress
+        // bar on the progress table cannot disagree.
+        var totalLessons = await db.Lessons.CountAsync(l => l.TeacherUserId == teacherId, ct);
+
+        return Ok(new StudentProfileDto(
+            studentId, enrollment.FullName, enrollment.DisplayName, enrollment.Email,
+            enrollment.Phone, enrollment.Bio, enrollment.PhotoETag, enrollment.JoinedAtUtc,
+            totalLessons, marks.Count, marks.Count(m => m.Passed), marks.Count(m => !m.Passed),
+            marks));
     }
 }

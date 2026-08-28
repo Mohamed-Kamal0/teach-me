@@ -168,6 +168,101 @@ public class OwnershipIsolationTests : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Student_profile_is_404_for_a_student_who_never_joined()
+    {
+        var admin = await TestAuth.SignedInAdminAsync(_factory);
+        var teacher = await TestAuth.RegisterAndSignInTeacherAsync(_factory, "isoF.d5@test.local");
+        await ApproveAsync(admin, "isoF.d5@test.local");
+
+        var stranger = await TestAuth.RegisterAndSignInStudentAsync(_factory, "isoStranger.d5@test.local");
+        var strangerId = (await (await stranger.GetAsync("/api/me")).Content.ReadFromJsonAsync<MeRow>(JsonDefaults.Options))!.UserId;
+
+        var response = await teacher.GetAsync($"/api/teacher/students/{strangerId}");
+
+        // Not 403 — a teacher must not be able to probe whether a given id is a student at all.
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Student_profile_marks_are_scoped_to_the_calling_teacher()
+    {
+        var (teacherA, teacherB, studentId) = await TwoTeachersOneStudentAsync("d6");
+
+        var fromA = await teacherA.GetFromJsonAsync<ProfileRow>($"/api/teacher/students/{studentId}", JsonDefaults.Options);
+        var fromB = await teacherB.GetFromJsonAsync<ProfileRow>($"/api/teacher/students/{studentId}", JsonDefaults.Options);
+
+        Assert.Equal(["A only"], fromA!.Marks.Select(m => m.LessonTitle));
+        Assert.Equal(["B one", "B two"], fromB!.Marks.Select(m => m.LessonTitle).Order());
+    }
+
+    [Fact]
+    public async Task Student_profile_total_lessons_is_the_calling_teachers_count()
+    {
+        var (teacherA, teacherB, studentId) = await TwoTeachersOneStudentAsync("d7");
+
+        var fromA = await teacherA.GetFromJsonAsync<ProfileRow>($"/api/teacher/students/{studentId}", JsonDefaults.Options);
+        var fromB = await teacherB.GetFromJsonAsync<ProfileRow>($"/api/teacher/students/{studentId}", JsonDefaults.Options);
+
+        // The denominator counts the caller's own lessons, so it cannot leak the other course's size.
+        Assert.Equal(1, fromA!.TotalLessons);
+        Assert.Equal(1, fromA.LessonsMarked);
+        Assert.Equal(2, fromB!.TotalLessons);
+        Assert.Equal(2, fromB.LessonsMarked);
+    }
+
+    /// <summary>Teacher A with one lesson, teacher B with two, and one student marked on all three.</summary>
+    private async Task<(HttpClient TeacherA, HttpClient TeacherB, Guid StudentId)> TwoTeachersOneStudentAsync(string tag)
+    {
+        var admin = await TestAuth.SignedInAdminAsync(_factory);
+
+        var teacherA = await TestAuth.RegisterAndSignInTeacherAsync(_factory, $"isoProfA.{tag}@test.local");
+        await ApproveAsync(admin, $"isoProfA.{tag}@test.local");
+        var teacherB = await TestAuth.RegisterAndSignInTeacherAsync(_factory, $"isoProfB.{tag}@test.local");
+        await ApproveAsync(admin, $"isoProfB.{tag}@test.local");
+
+        var lessonA = await CreateLessonAsync(teacherA, "A only", 1);
+        var lessonB1 = await CreateLessonAsync(teacherB, "B one", 1);
+        var lessonB2 = await CreateLessonAsync(teacherB, "B two", 2);
+
+        var codeA = (await teacherA.GetFromJsonAsync<JoinCodeEnvelope>("/api/teacher/students", JsonDefaults.Options))!.JoinCode;
+        var codeB = (await teacherB.GetFromJsonAsync<JoinCodeEnvelope>("/api/teacher/students", JsonDefaults.Options))!.JoinCode;
+
+        var student = await TestAuth.RegisterAndSignInStudentAsync(_factory, $"isoProfStudent.{tag}@test.local");
+        await student.PostAsJsonAsync("/api/student/enrollments", new { code = codeA });
+        await student.PostAsJsonAsync("/api/student/enrollments", new { code = codeB });
+        var studentId = (await student.GetFromJsonAsync<MeRow>("/api/me", JsonDefaults.Options))!.UserId;
+
+        await teacherA.PostAsJsonAsync("/api/teacher/marks", new { lessonId = lessonA, studentUserId = studentId, score = 15 });
+        await teacherB.PostAsJsonAsync("/api/teacher/marks", new { lessonId = lessonB1, studentUserId = studentId, score = 15 });
+        await teacherB.PostAsJsonAsync("/api/teacher/marks", new { lessonId = lessonB2, studentUserId = studentId, score = 5 });
+
+        return (teacherA, teacherB, studentId);
+    }
+
+    private static async Task<Guid> CreateLessonAsync(HttpClient teacher, string title, int orderIndex)
+    {
+        var response = await teacher.PostAsJsonAsync("/api/teacher/lessons", new
+        {
+            title,
+            orderIndex,
+            recordingUrl = "https://example.com/r",
+            handoutUrl = (string?)null,
+            quizUrl = (string?)null,
+            answersUrl = (string?)null,
+            durationMinutes = 30,
+            quizMaxScore = 20,
+            passMark = 10,
+            opensAtUtc = (DateTimeOffset?)null,
+            quizOpensAtUtc = (DateTimeOffset?)null,
+            answersOpenAtUtc = (DateTimeOffset?)null
+        });
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<LessonRow>(JsonDefaults.Options))!.Id;
+    }
+
+    private record ProfileRow(Guid UserId, int TotalLessons, int LessonsMarked, List<MarkRow> Marks);
+    private record MarkRow(string LessonTitle);
     private record PagedTeachers(List<TeacherRow> Items);
     private record TeacherRow(Guid UserId, string Email);
     private record JoinCodeEnvelope(string JoinCode);

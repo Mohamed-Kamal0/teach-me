@@ -2,7 +2,8 @@
 
 An ASP.NET Core 10 + Angular 18 teaching platform. Teachers publish lessons — a recording, and
 optionally a handout, a quiz and its answers — each released on its own schedule. Students join a
-teacher's course with a joining code and see only what is open to them, now.
+teacher's course with a joining code and see only what is open to them, now. A public directory
+at `/teachers` lists every approved teacher and their own course's numbers, signed in or not.
 
 The brief is [`project.md`](project.md); the design and schedule behind it is [`plan.md`](plan.md).
 
@@ -152,14 +153,15 @@ cd server
 dotnet test
 ```
 
-Eighteen tests across the four suites that a click-through cannot give you confidence in:
+Thirty-eight tests across the suites that a click-through cannot give you confidence in:
 
 | Suite                             | What it defends                                                                                                                                           |
 | :-------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **A** — `PendingTeacherTests`     | A pending or turned-away teacher is refused every teacher route; approval takes effect on the **next call**, with no re-login                             |
 | **B** — `MarkConstraintTests`     | No second mark for the same student on the same lesson (409); the score bound is read **from the lesson**; `passed` sent by a client is ignored           |
 | **C** — `TimingEnforcementTests`  | An unopened quiz has **no `quizUrl` key in the raw JSON** — asserted on the response string, because a missing key and a null key deserialise identically |
-| **D** — `OwnershipIsolationTests` | A teacher cannot reach another teacher's lesson (404); a student cannot read a course they never joined (**403**, not an empty list)                      |
+| **D** — `OwnershipIsolationTests` | A teacher cannot reach another teacher's lesson (404); a student cannot read a course they never joined (**403**, not an empty list); a student profile shows the calling teacher's marks and lesson count only |
+| **F** — `PublicDirectoryTests`    | The anonymous directory answers without a session, lists **approved teachers only**, and its raw body carries neither an email nor a join code; a teacher photo is public only while that teacher is approved |
 
 The tests run against **`Microsoft.Data.Sqlite`** in shared-cache in-memory mode, never EF Core's
 InMemory provider — that provider ignores unique indexes, so suite B would pass whether or not the

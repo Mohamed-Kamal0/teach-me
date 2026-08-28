@@ -42,12 +42,15 @@ import { NotifyService } from '../../core/notify.service';
               <mat-card-header><mat-card-title>Your courses</mat-card-title></mat-card-header>
               <mat-card-content>
                 @if (p.courses.length === 0) {
-                  <p class="text-muted">You're not on any course yet. <a routerLink="/student/join">Enter a joining code</a> to get started.</p>
+                  <p class="text-muted">You're not on any course yet.</p>
+                  <a mat-stroked-button routerLink="/student/join"><mat-icon>key</mat-icon> Enter a joining code</a>
                 } @else {
                   <ul class="course-list">
                     @for (c of p.courses; track c.teacherUserId) {
                       <li class="course-list__item">
-                        <a [routerLink]="['/student/courses', c.teacherUserId]">{{ c.teacherFullName }}</a>
+                        <a mat-stroked-button [routerLink]="['/student/courses', c.teacherUserId]">
+                          <mat-icon>school</mat-icon> {{ c.teacherFullName }}
+                        </a>
                         <span class="text-muted">joined {{ c.joinedAtUtc | date: 'mediumDate' }}</span>
                       </li>
                     }
@@ -111,12 +114,14 @@ import { NotifyService } from '../../core/notify.service';
     form button[type="submit"] { align-self: flex-start; margin-top: 0.25rem; }
     .course-list { list-style: none; padding: 0; margin: 0; }
     .course-list__item {
-      display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
+      /* Centred, not baseline: a button has no text baseline to sit a date against. */
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
       gap: 0.5rem; padding: 0.6rem 0; border-bottom: 1px solid var(--rule);
       font-size: var(--step--1);
     }
     .course-list__item:last-child { border-bottom: 0; }
-    .course-list__item a { font-size: var(--step-0); font-weight: 500; }
+    /* The teacher's name is where you go next, so it is a button and not a run of blue text. */
+    .course-list__item a { font-weight: 500; }
   `]
 })
 export class ProfileComponent implements OnInit {

@@ -69,7 +69,10 @@ function passwordsMatch(control: AbstractControl): ValidationErrors | null {
         </mat-card-content>
       </mat-card>
 
-      <p class="alt">Already registered? <a routerLink="/login">Sign in</a>.</p>
+      <p class="alt">Already registered?</p>
+      <div class="alt__actions">
+        <a mat-stroked-button routerLink="/login">Sign in</a>
+      </div>
     </div>
   `,
   styles: [`
@@ -77,7 +80,9 @@ function passwordsMatch(control: AbstractControl): ValidationErrors | null {
     .form-card { width: 100%; }
     form { display: flex; flex-direction: column; gap: 0.5rem; }
     form button[type="submit"] { margin-top: 0.5rem; }
+    /* The prompt stays a sentence; the way out of it is a button. */
     .alt { margin-top: 1rem; color: var(--muted); font-size: var(--step--1); }
+    .alt__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
   `]
 })
 export class RegisterStudentComponent {

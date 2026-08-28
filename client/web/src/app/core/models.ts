@@ -49,6 +49,21 @@ export interface TeacherSummary {
   photoETag: string | null;
 }
 
+/** A teacher as the public directory shows them: their own aggregates, never a student's.
+ *  markCount / passedMarkCount go over the wire separately so the client can render "—" for a
+ *  course nobody has sat a quiz on, rather than the server inventing a pass rate for 0/0. */
+export interface PublicTeacher {
+  userId: string;
+  fullName: string;
+  photoETag: string | null;
+  memberSinceUtc: string;
+  openLessonCount: number;
+  publishedLessonCount: number;
+  studentCount: number;
+  markCount: number;
+  passedMarkCount: number;
+}
+
 export interface Lesson {
   id: string;
   title: string;
@@ -112,11 +127,19 @@ export interface LessonMark {
   updatedAtUtc: string | null;
 }
 
-export interface StudentGradeDetail {
+export interface StudentProfile {
   userId: string;
   fullName: string;
+  displayName: string | null;
   email: string;
+  phone: string | null;
+  bio: string | null;
   photoETag: string | null;
+  joinedAtUtc: string;
+  totalLessons: number;
+  lessonsMarked: number;
+  passedCount: number;
+  failedCount: number;
   marks: LessonMark[];
 }
 

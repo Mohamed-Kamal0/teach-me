@@ -45,6 +45,11 @@
     "route": "/student/courses"
   },
   {
+    "keywords": ["teachers", "who teaches", "find a teacher", "browse teachers"],
+    "answer": "Every approved teacher is listed in the directory, with what they've published so far.",
+    "route": "/teachers"
+  },
+  {
     "keywords": ["password", "forgot password", "reset password", "login problem"],
     "answer": "There's no password reset in this app yet — ask your administrator for help.",
     "route": null

@@ -1,5 +1,6 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { Router, RouterLink } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { StatePanelComponent } from '../../shared/state-panel.component';
@@ -10,7 +11,7 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
 @Component({
   selector: 'app-progress',
   standalone: true,
-  imports: [MatTableModule, MatProgressBarModule, StatePanelComponent, AvatarComponent],
+  imports: [RouterLink, MatTableModule, MatProgressBarModule, StatePanelComponent, AvatarComponent],
   template: `
     <div class="page-head">
       <div class="page-head__text">
@@ -28,8 +29,10 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
           <ng-container matColumnDef="fullName">
             <th mat-header-cell *matHeaderCellDef>Student</th>
             <td mat-cell *matCellDef="let row" data-label="Student" class="cell-name">
-              <app-avatar size="sm" [userId]="row.studentUserId" [name]="row.fullName" [photoETag]="row.photoETag"></app-avatar>
-              <span>{{ row.fullName }}</span>
+              <span class="cell-name__inner">
+                <app-avatar size="sm" [userId]="row.studentUserId" [name]="row.fullName" [photoETag]="row.photoETag"></app-avatar>
+                <a [routerLink]="['/teacher/students', row.studentUserId]" class="cell-name__link">{{ row.fullName }}</a>
+              </span>
             </td>
           </ng-container>
           <ng-container matColumnDef="progress">
@@ -51,13 +54,27 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
             <td mat-cell *matCellDef="let row" data-label="Failed" class="text-danger tabular-nums">{{ row.failedCount }}</td>
           </ng-container>
           <tr mat-header-row *matHeaderRowDef="columns"></tr>
-          <tr mat-row *matRowDef="let row; columns: columns;"></tr>
+          <tr mat-row *matRowDef="let row; columns: columns;" class="row-link" (click)="open(row, $event)"></tr>
         </table>
       </div>
     </app-state-panel>
   `,
   styles: [`
-    .cell-name { font-weight: 500; display: flex; align-items: center; gap: 0.6rem; }
+    /* A <td> made into a flex container drops out of table-cell layout and stops stretching to
+       the row height, so its hairline sat above the neighbours'. The flex box moves inside; on
+       the stacked breakpoint, display:contents hands the children back to the cell so the
+       theme's margin-left:auto on the avatar keeps working. */
+    .cell-name { font-weight: 500; }
+    .cell-name__inner { display: flex; align-items: center; gap: 0.6rem; }
+    .cell-name__link { color: inherit; text-decoration: none; }
+    .cell-name__link:hover, .cell-name__link:focus-visible { text-decoration: underline; }
+    @media (max-width: 720px) { .cell-name__inner { display: contents; } }
+
+    /* This is the screen that says who is falling behind, so it is the likeliest place to want
+       a student opened. The anchor is the real link; the row is the convenience. */
+    .row-link { cursor: pointer; }
+    .row-link:hover { background: var(--paper-sunk); }
+    .row-link:focus-within { outline: 2px solid var(--primary); outline-offset: -2px; }
     .progress-cell { display: flex; align-items: center; gap: 0.75rem; min-width: 12rem; }
     .progress-cell mat-progress-bar { flex: 1; border-radius: 999px; }
     @media (max-width: 720px) {
@@ -72,6 +89,7 @@ export class ProgressComponent implements OnInit {
   rows = signal<ProgressRow[] | null>(null);
 
   private http = inject(HttpClient);
+  private router = inject(Router);
 
   ngOnInit(): void {
     this.load();
@@ -84,6 +102,15 @@ export class ProgressComponent implements OnInit {
       next: (res) => { this.rows.set(res.items); this.loading.set(false); },
       error: (err) => { this.error.set(problemFrom(err)); this.loading.set(false); }
     });
+  }
+
+  /** A click that began on something else interactive, or that ends a text selection, is left
+   *  alone — the anchor in the name cell is still the real way in. */
+  open(row: ProgressRow, event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    if (target.closest('a, button, input')) return;
+    if (window.getSelection()?.toString()) return;
+    this.router.navigate(['/teacher/students', row.studentUserId]);
   }
 
   percent(row: ProgressRow): number {

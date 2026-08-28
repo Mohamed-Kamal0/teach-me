@@ -601,6 +601,24 @@ A broken database at 09:00 on demo day is then a thirty-second fix, not an impro
 
 ---
 
+## Appendix C — The public directory is the first anonymous read path beyond `/api/public/home`
+
+`GET /api/public/teachers` and `GET /api/public/teachers/{id}/photo` (see [`discover.md`](discover.md))
+are the first endpoints to serve *per-row* data to someone with no session. `/api/public/home`
+only ever returned two totals, so nothing it sent could be traced to a person.
+
+Two consequences worth keeping in mind before anything else is added under `/api/public`:
+
+- **A separate DTO, not a reused one.** `PublicTeacherDto` exists so that a field added later to
+  the admin screen's `TeacherSummaryDto` — which already carries `Email` — cannot arrive on an
+  anonymous page by accident. Every statistic on it is an aggregate over a teacher's own course.
+- **Authorisation moved into the query.** `PhotoController` stays `[Authorize]` at the class
+  level; the one public action asks "is this an approved teacher?" in SQL rather than opening
+  `/api/users/{id}/photo` to every id. §4 chose UUIDv7 so an id would carry *no* authority — that
+  choice only holds if no route treats holding one as permission.
+
+---
+
 ## Appendix A — What I would build next: rotating refresh tokens
 
 **Not built.** Nothing in the 23 requirements asks for it, it is roughly a day, and it would sit on the main request path ahead of every lesson, mark and enrolment. The sliding cookie ticket in §4 covers Req 2 completely. This is the design I would reach for on a real system, and it is a real answer to "how would you harden this".

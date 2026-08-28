@@ -2,6 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { StatePanelComponent } from '../../shared/state-panel.component';
@@ -14,11 +15,11 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
   selector: 'app-course-lessons',
   standalone: true,
   imports: [
-    DatePipe, RouterLink, MatIconModule, MatExpansionModule, StatePanelComponent,
+    DatePipe, RouterLink, MatButtonModule, MatIconModule, MatExpansionModule, StatePanelComponent,
     MediaEmbedComponent, ReleaseRailComponent
   ],
   template: `
-    <a routerLink="/student/courses" class="back-link"><mat-icon inline>arrow_back</mat-icon> Back to courses</a>
+    <a mat-stroked-button routerLink="/student/courses" class="back-link"><mat-icon>arrow_back</mat-icon> Back to courses</a>
 
     <app-state-panel [loading]="loading()" [error]="error()" [empty]="(rows()?.length ?? 0) === 0"
       emptyIcon="menu_book" (retry)="load()"
@@ -64,7 +65,7 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
     </app-state-panel>
   `,
   styles: [`
-    .back-link { display: inline-flex; align-items: center; gap: 0.3rem; text-decoration: none; margin-bottom: 1rem; }
+    .back-link { margin-bottom: 1rem; }
     .lesson { margin-bottom: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius) !important; }
     .lesson__title { font-family: 'Lora', Georgia, serif; font-weight: 600; }
     .lesson__desc { justify-content: flex-end; flex-grow: 0; }

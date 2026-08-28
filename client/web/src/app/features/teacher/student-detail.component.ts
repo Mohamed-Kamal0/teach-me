@@ -1,4 +1,5 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
@@ -6,10 +7,11 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { FormsModule } from '@angular/forms';
 import { StatePanelComponent } from '../../shared/state-panel.component';
 import { AvatarComponent } from '../../shared/avatar.component';
-import { LessonMark, ProblemDetails, StudentGradeDetail } from '../../core/models';
+import { LessonMark, ProblemDetails, StudentProfile } from '../../core/models';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
 import { NotifyService } from '../../core/notify.service';
 
@@ -17,11 +19,11 @@ import { NotifyService } from '../../core/notify.service';
   selector: 'app-student-detail',
   standalone: true,
   imports: [
-    RouterLink, MatTableModule, MatButtonModule, MatIconModule, MatFormFieldModule,
-    MatInputModule, FormsModule, StatePanelComponent, AvatarComponent
+    DatePipe, RouterLink, MatTableModule, MatButtonModule, MatIconModule, MatFormFieldModule,
+    MatInputModule, MatProgressBarModule, FormsModule, StatePanelComponent, AvatarComponent
   ],
   template: `
-    <a routerLink="/teacher/students" class="back-link"><mat-icon inline>arrow_back</mat-icon> Back to students</a>
+    <a mat-stroked-button routerLink="/teacher/students" class="back-link"><mat-icon>arrow_back</mat-icon> Back to students</a>
 
     <app-state-panel [loading]="loading()" [error]="error()" (retry)="load()">
       @if (data(); as d) {
@@ -30,9 +32,43 @@ import { NotifyService } from '../../core/notify.service';
           <div class="page-head__text">
             <span class="eyebrow">Student</span>
             <h1 class="app-heading">{{ d.fullName }}</h1>
-            <p class="page-head__sub">{{ d.email }}</p>
+            <!-- Each fact is nullable on Student and commonly null, so each gets its own guard:
+                 never a "Phone:" label with nothing after it. -->
+            @if (d.displayName && d.displayName !== d.fullName) {
+              <p class="page-head__alias">&ldquo;{{ d.displayName }}&rdquo;</p>
+            }
+            <p class="page-head__sub facts">
+              <span>{{ d.email }}</span>
+              @if (d.phone) {
+                <span class="facts__sep" aria-hidden="true">·</span>
+                <span>{{ d.phone }}</span>
+              }
+              <span class="facts__sep" aria-hidden="true">·</span>
+              <span>Joined {{ d.joinedAtUtc | date: 'mediumDate' }}</span>
+            </p>
           </div>
         </div>
+
+        <div class="rollup">
+          <mat-progress-bar mode="determinate" [value]="percent(d)"
+            [attr.aria-label]="d.fullName + ': ' + d.lessonsMarked + ' of ' + d.totalLessons + ' lessons marked'"></mat-progress-bar>
+          <p class="rollup__figures tabular-nums">
+            <span>{{ d.lessonsMarked }} of {{ d.totalLessons }} lessons marked</span>
+            <span class="facts__sep" aria-hidden="true">·</span>
+            <span class="text-success">{{ d.passedCount }} passed</span>
+            <span class="facts__sep" aria-hidden="true">·</span>
+            <span class="text-danger">{{ d.failedCount }} failed</span>
+          </p>
+        </div>
+
+        @if (d.bio) {
+          <section class="about">
+            <h2 class="section-title">About</h2>
+            <p class="about__text">{{ d.bio }}</p>
+          </section>
+        }
+
+        <h2 class="section-title">Marks</h2>
 
         @if (d.marks.length === 0) {
           <p class="text-muted">No marks recorded for this student yet.</p>
@@ -86,8 +122,39 @@ import { NotifyService } from '../../core/notify.service';
     </app-state-panel>
   `,
   styles: [`
-    .back-link { display: inline-flex; align-items: center; gap: 0.3rem; text-decoration: none; margin-bottom: 1rem; }
-    .page-head { align-items: center; }
+    .back-link { margin-bottom: 1rem; }
+    /* The identity block belongs beside the face, not pushed to the far edge by the default
+       page-head's space-between. */
+    .page-head { align-items: center; justify-content: flex-start; gap: 1.25rem; }
+    .page-head__alias { margin: 0.1rem 0 0; color: var(--tertiary-text); font-style: italic; }
+    .facts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+    .facts__sep { color: var(--border); }
+
+    .rollup {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin: 1.25rem 0 1.5rem;
+      padding: 1rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--paper);
+    }
+    .rollup mat-progress-bar { border-radius: 999px; }
+    .rollup__figures { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0; }
+
+    .section-title { font-size: var(--step-1); margin: 0 0 0.6rem; }
+    .about { margin-bottom: 1.5rem; }
+    /* A bio is free text a student wrote; three lines is enough to recognise them by. */
+    .about__text {
+      margin: 0;
+      color: var(--muted);
+      max-width: 60ch;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
     .cell-title { font-weight: 500; }
     .score-field { width: 5.5rem; }
     .score-of { margin-left: 0.4rem; color: var(--muted); }
@@ -98,7 +165,7 @@ export class StudentDetailComponent implements OnInit {
   columns = ['lessonTitle', 'score', 'result', 'actions'];
   loading = signal(true);
   error = signal<ProblemDetails | null>(null);
-  data = signal<StudentGradeDetail | null>(null);
+  data = signal<StudentProfile | null>(null);
   editingId = signal<string | null>(null);
   saving = signal(false);
   editScore = 0;
@@ -116,10 +183,15 @@ export class StudentDetailComponent implements OnInit {
   load(): void {
     this.loading.set(true);
     this.error.set(null);
-    this.http.get<StudentGradeDetail>(`/api/teacher/students/${this.studentId}`).subscribe({
+    this.http.get<StudentProfile>(`/api/teacher/students/${this.studentId}`).subscribe({
       next: (res) => { this.data.set(res); this.loading.set(false); },
       error: (err) => { this.error.set(problemFrom(err)); this.loading.set(false); }
     });
+  }
+
+  /** Same arithmetic as the progress table's bar, off the same two numbers. */
+  percent(d: StudentProfile): number {
+    return d.totalLessons === 0 ? 0 : Math.round((d.lessonsMarked / d.totalLessons) * 100);
   }
 
   edit(row: LessonMark): void {
