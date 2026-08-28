@@ -10,6 +10,7 @@ import { AuthService } from './core/auth.service';
 import { NotifyService } from './core/notify.service';
 import { HelperWidgetComponent } from './features/helper/helper-widget.component';
 import { ServerDownComponent } from './shared/server-down.component';
+import { AvatarComponent } from './shared/avatar.component';
 
 /** A destination in the app bar. The icon is the one the plan assigns to that concept, so the
  * drawer and the bar name the same thing the same way. */
@@ -24,7 +25,7 @@ export interface NavLink {
   standalone: true,
   imports: [
     RouterOutlet, RouterLink, RouterLinkActive, MatToolbarModule, MatButtonModule, MatIconModule,
-    MatMenuModule, MatSidenavModule, HelperWidgetComponent, ServerDownComponent
+    MatMenuModule, MatSidenavModule, HelperWidgetComponent, ServerDownComponent, AvatarComponent
   ],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss'
@@ -72,6 +73,15 @@ export class AppComponent {
     this.router.events
       .pipe(filter(event => event instanceof NavigationEnd))
       .subscribe(() => this.drawerOpen.set(false));
+  }
+
+  /** Where the account menu's "Profile" link points, or null for roles without a profile page. */
+  get profilePath(): string | null {
+    switch (this.auth.role()) {
+      case 'Student': return '/student/profile';
+      case 'Teacher': return '/teacher/profile';
+      default: return null;
+    }
   }
 
   roleChipClass(): string {

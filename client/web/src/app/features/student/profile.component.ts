@@ -10,6 +10,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { StatePanelComponent } from '../../shared/state-panel.component';
+import { PhotoCardComponent } from '../../shared/photo-card.component';
 import { Profile, ProblemDetails } from '../../core/models';
 import { applyServerErrors, fieldMessage, revealErrors } from '../../core/form-errors';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
@@ -20,7 +21,8 @@ import { NotifyService } from '../../core/notify.service';
   standalone: true,
   imports: [
     DatePipe, RouterLink, ReactiveFormsModule, MatFormFieldModule, MatInputModule,
-    MatButtonModule, MatCardModule, MatIconModule, MatProgressSpinnerModule, StatePanelComponent
+    MatButtonModule, MatCardModule, MatIconModule, MatProgressSpinnerModule, StatePanelComponent,
+    PhotoCardComponent
   ],
   template: `
     <div class="page-head">
@@ -33,6 +35,8 @@ import { NotifyService } from '../../core/notify.service';
     <app-state-panel [loading]="loading()" [error]="error()" (retry)="load()">
       @if (profile(); as p) {
         <div class="grid">
+          <app-photo-card></app-photo-card>
+
           <mat-card>
             <mat-card-header><mat-card-title>Account</mat-card-title></mat-card-header>
             <mat-card-content>

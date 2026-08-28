@@ -55,6 +55,11 @@ export const routes: Routes = [
     canActivate: [roleGuard('Teacher'), teacherApprovedGuard],
     loadComponent: () => import('./features/teacher/progress.component').then(m => m.ProgressComponent)
   },
+  {
+    path: 'teacher/profile',
+    canActivate: [roleGuard('Teacher')],
+    loadComponent: () => import('./features/teacher/profile.component').then(m => m.TeacherProfileComponent)
+  },
 
   {
     path: 'student/profile',

@@ -25,7 +25,9 @@ public class StudentsController(AppDbContext db, ICurrentUser currentUser) : Con
         var total = await query.CountAsync(ct);
         var items = await query
             .Skip((p - 1) * ps).Take(ps)
-            .Select(e => new StudentSummaryDto(e.StudentUserId, e.Student.User.FullName, e.Student.User.Email, e.JoinedAtUtc))
+            .Select(e => new StudentSummaryDto(
+                e.StudentUserId, e.Student.User.FullName, e.Student.User.Email, e.JoinedAtUtc,
+                db.Avatars.Where(a => a.UserId == e.StudentUserId).Select(a => a.ETag).FirstOrDefault()))
             .ToListAsync(ct);
 
         return Ok(new TeacherStudentsResponse(joinCode, new PagedResult<StudentSummaryDto> { Items = items, Page = p, PageSize = ps, Total = total }));
@@ -38,7 +40,12 @@ public class StudentsController(AppDbContext db, ICurrentUser currentUser) : Con
 
         var enrollment = await db.Enrollments
             .Where(e => e.TeacherUserId == teacherId && e.StudentUserId == studentId)
-            .Select(e => new { e.Student.User.FullName, e.Student.User.Email })
+            .Select(e => new
+            {
+                e.Student.User.FullName,
+                e.Student.User.Email,
+                PhotoETag = db.Avatars.Where(a => a.UserId == studentId).Select(a => a.ETag).FirstOrDefault()
+            })
             .FirstOrDefaultAsync(ct);
 
         if (enrollment is null)
@@ -54,6 +61,6 @@ public class StudentsController(AppDbContext db, ICurrentUser currentUser) : Con
                 m.Score, m.Score >= m.Lesson.PassMark, m.RecordedAtUtc, m.UpdatedAtUtc, m.Id))
             .ToListAsync(ct);
 
-        return Ok(new StudentGradeDetailDto(studentId, enrollment.FullName, enrollment.Email, marks));
+        return Ok(new StudentGradeDetailDto(studentId, enrollment.FullName, enrollment.Email, enrollment.PhotoETag, marks));
     }
 }

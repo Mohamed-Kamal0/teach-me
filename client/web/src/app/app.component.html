@@ -1,6 +1,9 @@
 <mat-sidenav-container class="shell" [hasBackdrop]="true">
   <mat-sidenav class="drawer" mode="over" [opened]="drawerOpen()" (closedStart)="drawerOpen.set(false)">
     <div class="drawer__head">
+      @if (auth.me(); as me) {
+        <app-avatar class="drawer__avatar" size="lg" [userId]="me.userId" [name]="me.fullName" [photoETag]="me.photoETag"></app-avatar>
+      }
       <span class="eyebrow">Signed in as</span>
       <p class="drawer__name">{{ auth.me()?.fullName }}</p>
       <p class="drawer__email">{{ auth.me()?.email }}</p>
@@ -48,10 +51,20 @@
           </nav>
 
           <button mat-icon-button [matMenuTriggerFor]="menu" aria-label="Account menu">
-            <mat-icon>account_circle</mat-icon>
+            @if (auth.me(); as me) {
+              <app-avatar size="sm" [userId]="me.userId" [name]="me.fullName" [photoETag]="me.photoETag"></app-avatar>
+            } @else {
+              <mat-icon>account_circle</mat-icon>
+            }
           </button>
           <mat-menu #menu="matMenu">
             <div class="menu-email">{{ auth.me()?.email }}</div>
+            @if (profilePath) {
+              <a mat-menu-item [routerLink]="profilePath">
+                <mat-icon>account_circle</mat-icon>
+                <span>Profile</span>
+              </a>
+            }
             <button mat-menu-item (click)="signOut()">
               <mat-icon>logout</mat-icon>
               <span>Sign out</span>

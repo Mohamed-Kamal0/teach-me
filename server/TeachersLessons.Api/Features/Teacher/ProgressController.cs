@@ -34,11 +34,18 @@ public class ProgressController(AppDbContext db, ICurrentUser currentUser) : Con
             .Select(m => new { m.StudentUserId, Passed = m.Score >= m.Lesson.PassMark })
             .ToListAsync(ct);
 
+        var photoETags = await db.Avatars
+            .Where(a => studentIds.Contains(a.UserId))
+            .Select(a => new { a.UserId, a.ETag })
+            .ToListAsync(ct);
+        var photoByStudent = photoETags.ToDictionary(x => x.UserId, x => x.ETag);
+
         var items = enrolled.Select(e =>
         {
             var studentMarks = marks.Where(m => m.StudentUserId == e.StudentUserId).ToList();
             return new ProgressDto(
                 e.StudentUserId, e.FullName,
+                photoByStudent.GetValueOrDefault(e.StudentUserId),
                 studentMarks.Count, totalLessons,
                 studentMarks.Count(m => m.Passed), studentMarks.Count(m => !m.Passed));
         }).ToList();

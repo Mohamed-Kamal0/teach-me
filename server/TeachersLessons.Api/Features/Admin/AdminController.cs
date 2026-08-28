@@ -29,7 +29,8 @@ public class AdminController(AppDbContext db, ICurrentUser currentUser, TimeProv
             .Skip((p - 1) * ps)
             .Take(ps)
             .Select(t => new TeacherSummaryDto(
-                t.UserId, t.User.FullName, t.User.Email, t.Status.ToString(), t.User.CreatedAtUtc, t.DecidedAtUtc))
+                t.UserId, t.User.FullName, t.User.Email, t.Status.ToString(), t.User.CreatedAtUtc, t.DecidedAtUtc,
+                db.Avatars.Where(a => a.UserId == t.UserId).Select(a => a.ETag).FirstOrDefault()))
             .ToListAsync(ct);
 
         return Ok(new PagedResult<TeacherSummaryDto> { Items = items, Page = p, PageSize = ps, Total = total });

@@ -107,6 +107,7 @@
 .drawer { width: min(19rem, 82vw); background: var(--paper); border-right: 1px solid var(--border); }
 
 .drawer__head { padding: 1.25rem 1.25rem 1rem; background: var(--paper-sunk); border-bottom: 1px solid var(--border); }
+.drawer__avatar { display: block; margin-bottom: 0.6rem; }
 .drawer__name { margin: 0; font-family: 'Lora', Georgia, serif; font-weight: 600; }
 .drawer__email { margin: 0; color: var(--muted); font-size: var(--step--1); word-break: break-all; }
 

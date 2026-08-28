@@ -6,6 +6,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatIconModule } from '@angular/material/icon';
 import { StatePanelComponent } from '../../shared/state-panel.component';
+import { AvatarComponent } from '../../shared/avatar.component';
 import { PagedResult, ProblemDetails, TeacherStatus, TeacherSummary } from '../../core/models';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
 import { NotifyService } from '../../core/notify.service';
@@ -14,7 +15,8 @@ import { NotifyService } from '../../core/notify.service';
   selector: 'app-approvals',
   standalone: true,
   imports: [
-    DatePipe, MatTableModule, MatButtonModule, MatButtonToggleModule, MatIconModule, StatePanelComponent
+    DatePipe, MatTableModule, MatButtonModule, MatButtonToggleModule, MatIconModule, StatePanelComponent,
+    AvatarComponent
   ],
   template: `
     <div class="page-head">
@@ -39,7 +41,10 @@ import { NotifyService } from '../../core/notify.service';
         <table mat-table [dataSource]="rows() ?? []" class="data-table">
           <ng-container matColumnDef="fullName">
             <th mat-header-cell *matHeaderCellDef>Name</th>
-            <td mat-cell *matCellDef="let row" data-label="Name" class="cell-name">{{ row.fullName }}</td>
+            <td mat-cell *matCellDef="let row" data-label="Name" class="cell-name">
+              <app-avatar size="sm" [userId]="row.userId" [name]="row.fullName" [photoETag]="row.photoETag"></app-avatar>
+              <span>{{ row.fullName }}</span>
+            </td>
           </ng-container>
           <ng-container matColumnDef="email">
             <th mat-header-cell *matHeaderCellDef>Email</th>
@@ -70,7 +75,7 @@ import { NotifyService } from '../../core/notify.service';
     </app-state-panel>
   `,
   styles: [`
-    .cell-name { font-weight: 500; }
+    .cell-name { font-weight: 500; display: flex; align-items: center; gap: 0.6rem; }
     .cell-email { word-break: break-all; }
     .danger-action { color: var(--danger); }
     .decided { display: inline-flex; align-items: center; gap: 0.25rem; }
