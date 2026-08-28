@@ -1,4 +1,5 @@
 import { Component, inject, signal } from '@angular/core';
+import { animate, style, transition, trigger } from '@angular/animations';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -21,9 +22,32 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
     MatInputModule,
     MatProgressSpinnerModule,
   ],
+  animations: [
+    trigger('panelAnim', [
+      transition(':enter', [
+        style({ opacity: 0, transform: 'translateY(12px) scale(0.94)' }),
+        animate(
+          '260ms cubic-bezier(0.16, 1, 0.3, 1)',
+          style({ opacity: 1, transform: 'translateY(0) scale(1)' }),
+        ),
+      ]),
+      transition(':leave', [
+        animate(
+          '170ms ease',
+          style({ opacity: 0, transform: 'translateY(12px) scale(0.96)' }),
+        ),
+      ]),
+    ]),
+  ],
   template: `
     @if (open()) {
-      <div class="panel" role="dialog" aria-label="Helper">
+      <div
+        class="panel"
+        role="dialog"
+        aria-label="Helper"
+        @panelAnim
+        [@.disabled]="reduceMotion"
+      >
         <div class="panel-header">
           <span>Helper</span>
           <button
@@ -120,6 +144,16 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
         bottom: 1.5rem;
         right: 1.5rem;
         z-index: 20;
+        transition: transform 0.25s ease;
+      }
+      .fab:hover {
+        transform: scale(1.06);
+      }
+      .fab mat-icon {
+        transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+      .fab[aria-expanded='true'] mat-icon {
+        transform: rotate(180deg);
       }
       .panel {
         position: fixed;
@@ -136,6 +170,29 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
         display: flex;
         flex-direction: column;
         overflow: hidden;
+        transform-origin: bottom right;
+      }
+      .panel-body > * {
+        animation: helper-fade-in 0.25s ease both;
+      }
+      @keyframes helper-fade-in {
+        from {
+          opacity: 0;
+          transform: translateY(4px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .fab,
+        .fab mat-icon,
+        .panel,
+        .panel-body > * {
+          animation: none;
+          transition: none;
+        }
       }
       .panel-header {
         display: flex;
@@ -207,6 +264,10 @@ export class HelperWidgetComponent {
   asking = signal(false);
   /** Set only when the request itself failed — never when the helper simply has no answer. */
   failure = signal<string | null>(null);
+
+  /** Skips the open/close transition for readers who asked for less motion. */
+  readonly reduceMotion =
+    typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   private http = inject(HttpClient);
   private router = inject(Router);

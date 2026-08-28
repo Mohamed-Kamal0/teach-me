@@ -39,7 +39,9 @@ const SIZE_PX: Record<AvatarSize, number> = { sm: 32, md: 48, lg: 96 };
     }
   `,
   styles: [`
-    :host { display: inline-flex; flex: none; }
+    /* align-self keeps a baseline-aligned parent from hanging the tile above its own box and
+       into whatever sits over it. */
+    :host { display: inline-flex; flex: none; align-self: center; vertical-align: middle; }
     .avatar {
       display: inline-flex;
       align-items: center;

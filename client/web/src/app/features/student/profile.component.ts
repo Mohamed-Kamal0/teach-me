@@ -35,7 +35,27 @@ import { NotifyService } from '../../core/notify.service';
     <app-state-panel [loading]="loading()" [error]="error()" (retry)="load()">
       @if (profile(); as p) {
         <div class="grid">
-          <app-photo-card></app-photo-card>
+          <div class="col">
+            <app-photo-card></app-photo-card>
+
+            <mat-card>
+              <mat-card-header><mat-card-title>Your courses</mat-card-title></mat-card-header>
+              <mat-card-content>
+                @if (p.courses.length === 0) {
+                  <p class="text-muted">You're not on any course yet. <a routerLink="/student/join">Enter a joining code</a> to get started.</p>
+                } @else {
+                  <ul class="course-list">
+                    @for (c of p.courses; track c.teacherUserId) {
+                      <li class="course-list__item">
+                        <a [routerLink]="['/student/courses', c.teacherUserId]">{{ c.teacherFullName }}</a>
+                        <span class="text-muted">joined {{ c.joinedAtUtc | date: 'mediumDate' }}</span>
+                      </li>
+                    }
+                  </ul>
+                }
+              </mat-card-content>
+            </mat-card>
+          </div>
 
           <mat-card>
             <mat-card-header><mat-card-title>Account</mat-card-title></mat-card-header>
@@ -77,30 +97,13 @@ import { NotifyService } from '../../core/notify.service';
               </form>
             </mat-card-content>
           </mat-card>
-
-          <mat-card>
-            <mat-card-header><mat-card-title>Your courses</mat-card-title></mat-card-header>
-            <mat-card-content>
-              @if (p.courses.length === 0) {
-                <p class="text-muted">You're not on any course yet. <a routerLink="/student/join">Enter a joining code</a> to get started.</p>
-              } @else {
-                <ul class="course-list">
-                  @for (c of p.courses; track c.teacherUserId) {
-                    <li class="course-list__item">
-                      <a [routerLink]="['/student/courses', c.teacherUserId]">{{ c.teacherFullName }}</a>
-                      <span class="text-muted">joined {{ c.joinedAtUtc | date: 'mediumDate' }}</span>
-                    </li>
-                  }
-                </ul>
-              }
-            </mat-card-content>
-          </mat-card>
         </div>
       }
     </app-state-panel>
   `,
   styles: [`
     .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+    .col { display: flex; flex-direction: column; gap: 1rem; }
     @media (max-width: 800px) { .grid { grid-template-columns: minmax(0, 1fr); } }
     .identity { margin: 0; font-family: 'Lora', Georgia, serif; font-size: var(--step-1); font-weight: 600; }
     .identity__email { margin: 0 0 0.5rem; font-size: var(--step--1); word-break: break-all; }
