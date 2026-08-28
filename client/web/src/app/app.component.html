@@ -189,6 +189,16 @@
       @if (auth.serverUnreachable()) {
         <app-server-down></app-server-down>
       } @else {
+        <!-- Each page's code is fetched the first time it is asked for, so on a slow connection
+             this area sits empty between the bar appearing and the page arriving. The outlet
+             stays mounted either side of it — taking it out and putting it back would tear down
+             the view the router is in the middle of activating. -->
+        @if (navigating()) {
+          <div class="route-loading" role="status" aria-live="polite">
+            <span class="route-loading__ring" aria-hidden="true"></span>
+            <p>Loading…</p>
+          </div>
+        }
         <router-outlet></router-outlet>
       }
     </main>

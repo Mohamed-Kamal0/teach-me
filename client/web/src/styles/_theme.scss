@@ -165,6 +165,44 @@ table, .tabular-nums { font-variant-numeric: tabular-nums; }
   padding: clamp(1rem, 3vw, 2rem) var(--gutter) 4rem;
 }
 
+// Holds the space a page is about to fill, so a slow route reads as "on its way" rather than
+// as a blank screen. Deep enough that the spinner lands where the eye already is.
+.route-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  min-height: 55vh;
+
+  p {
+    margin: 0;
+    font-size: var(--step--1);
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+}
+
+// One ring turning at one speed. Material's indeterminate spinner sweeps its arc open and shut
+// while the whole svg rotates, which at this size reads as two motions fighting each other.
+// This is the same ring index.html paints before the app boots, so the wait looks continuous.
+.route-loading__ring {
+  width: 38px;
+  height: 38px;
+  border: 3px solid var(--primary-wash);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: route-loading-spin 0.9s linear infinite;
+}
+
+@keyframes route-loading-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .route-loading__ring { animation-duration: 2.4s; }
+}
+
 // ---- Page head -------------------------------------------------------------
 // A heading sits on a hairline that runs the width of the content — the ruled line of an
 // exercise book. Actions ride the same line on a desktop and stack beneath it on a phone.

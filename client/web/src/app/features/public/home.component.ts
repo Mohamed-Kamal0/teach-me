@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { AfterViewChecked, AfterViewInit, Component, ElementRef, NgZone, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -90,11 +90,6 @@ import { AuthService } from '../../core/auth.service';
             </a>
           </section>
         }
-
-        <p class="join reveal">
-          <mat-icon>key</mat-icon>
-          <span>{{ home.howToJoin }}</span>
-        </p>
       }
     </app-state-panel>
   `,
@@ -107,7 +102,7 @@ import { AuthService } from '../../core/auth.service';
       margin-bottom: -3rem;
     }
     /* Centred reading columns. */
-    .stats, .join { max-width: 46rem; margin-inline: auto; }
+    .stats { max-width: 46rem; margin-inline: auto; }
     .moments { max-width: 62rem; margin: 1.75rem auto 0; }
 
     /* ---- Reveal on view. Keyframes rather than a transition, so the cards keep their own
@@ -249,20 +244,6 @@ import { AuthService } from '../../core/auth.service';
     }
     .meet__all { margin-top: 1.25rem; }
 
-    /* ---- The way in ----------------------------------------------------- */
-    .join {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.6rem;
-      margin: 0;
-      padding: 1rem 0 0.5rem;
-      border-top: 1px solid var(--border);
-      color: var(--tertiary-text);
-      font-weight: 500;
-    }
-    .join mat-icon { flex: none; color: var(--primary); }
-
     @media (max-width: 800px) {
       .moments { grid-template-columns: 1fr; }
       .actions > * { flex: 1 1 100%; }
@@ -273,9 +254,10 @@ import { AuthService } from '../../core/auth.service';
     }
   `]
 })
-export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
+export class HomeComponent implements OnInit, AfterViewInit, AfterViewChecked, OnDestroy {
   readonly auth = inject(AuthService);
   private host = inject(ElementRef<HTMLElement>);
+  private zone = inject(NgZone);
 
   loading = signal(true);
   error = signal<ProblemDetails | null>(null);
@@ -287,6 +269,9 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
   enrolledIds = signal<Set<string>>(new Set());
 
   private observer?: IntersectionObserver;
+  private revealTimer?: ReturnType<typeof setTimeout>;
+  /** Set once the reveal is no longer worth waiting for: from here on blocks are shown outright. */
+  private revealNow = false;
 
   constructor(private http: HttpClient) {}
 
@@ -300,9 +285,8 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
     const prefersReduced =
       typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (prefersReduced || typeof IntersectionObserver === 'undefined') {
-      this.host.nativeElement
-        .querySelectorAll('.reveal')
-        .forEach((el: Element) => el.classList.add('in-view'));
+      this.revealNow = true;
+      this.showReveals();
       return;
     }
 
@@ -315,20 +299,51 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
           }
         }
       },
-      { threshold: 0.15, rootMargin: '0px 0px -10% 0px' },
+      // No negative bottom margin: this page is written to sit inside one screen, so a block in
+      // the last tenth of the viewport is on show and has no scroll coming that would reveal it.
+      { threshold: 0.15 },
     );
     this.observeReveals();
+
+    // Last resort, for anything on screen the observer has not reported on by this point:
+    // a section that skips its fade beats a section nobody can see. Blocks still below the
+    // fold are left alone — those have a scroll coming that will bring them in properly.
+    this.zone.runOutsideAngular(() => {
+      this.revealTimer = setTimeout(() => this.showReveals(true), 3000);
+    });
+  }
+
+  /** The stats, the teacher strip and the join line arrive with their fetches, well after the
+   *  first view check, and each one lands in the DOM on the render that follows its response.
+   *  Hooking the check itself is what catches them; a timer fired from the response handler
+   *  raced that render and sometimes ran first, leaving the block observed by nobody and so
+   *  stuck at `opacity: 0` for the life of the page. */
+  ngAfterViewChecked(): void {
+    if (this.revealNow) this.showReveals();
+    else this.observeReveals();
   }
 
   ngOnDestroy(): void {
     this.observer?.disconnect();
+    clearTimeout(this.revealTimer);
   }
 
-  /** Re-runs after the state panel swaps in the stats/join blocks so they get observed too. */
   private observeReveals(): void {
-    this.host.nativeElement
-      .querySelectorAll('.reveal:not(.in-view)')
-      .forEach((el: Element) => this.observer?.observe(el));
+    this.pendingReveals().forEach((el) => this.observer?.observe(el));
+  }
+
+  private showReveals(onScreenOnly = false): void {
+    for (const el of this.pendingReveals()) {
+      if (onScreenOnly) {
+        const box = el.getBoundingClientRect();
+        if (box.bottom <= 0 || box.top >= window.innerHeight) continue;
+      }
+      el.classList.add('in-view');
+    }
+  }
+
+  private pendingReveals(): Element[] {
+    return Array.from(this.host.nativeElement.querySelectorAll('.reveal:not(.in-view)'));
   }
 
   load(): void {
@@ -338,7 +353,6 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
       next: (res) => {
         this.data.set(res);
         this.loading.set(false);
-        setTimeout(() => this.observeReveals());
       },
       error: (err) => { this.error.set(problemFrom(err)); this.loading.set(false); }
     });
@@ -348,7 +362,6 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
     this.http.get<PagedResult<PublicTeacher>>('/api/public/teachers?page=1&pageSize=3').subscribe({
       next: (res) => {
         this.teachers.set(res.items);
-        setTimeout(() => this.observeReveals());
       },
       error: () => this.teachers.set([])
     });

@@ -10,6 +10,48 @@
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
 <body class="mat-typography">
-  <app-root></app-root>
+  <!-- The session check that runs before Angular bootstraps has to reach the API, and a cold
+       server can take seconds over it. This splash lives inside <app-root>, so it is on screen
+       from the first paint and Angular throws it away the moment it renders the app — which
+       leaves a spinner where there used to be a blank white page. -->
+  <app-root>
+    <div class="app-splash">
+      <div class="app-splash__ring" role="status" aria-label="Loading"></div>
+      <p class="app-splash__text">Teachers, Lessons and Students</p>
+    </div>
+  </app-root>
+  <style>
+    .app-splash {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.25rem;
+      background: #FAF8F4;
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+    .app-splash__ring {
+      width: 38px;
+      height: 38px;
+      border: 3px solid rgba(49, 69, 106, 0.18);
+      border-top-color: #31456A;
+      border-radius: 50%;
+      animation: app-splash-spin 0.9s linear infinite;
+    }
+    .app-splash__text {
+      margin: 0;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #6B7280;
+    }
+    @keyframes app-splash-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .app-splash__ring { animation-duration: 2.4s; }
+    }
+  </style>
 </body>
 </html>

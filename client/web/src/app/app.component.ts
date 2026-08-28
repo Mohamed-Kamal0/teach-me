@@ -1,6 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { filter } from 'rxjs';
+import { NavigationCancel, NavigationEnd, NavigationError, NavigationStart, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -27,7 +26,8 @@ export interface NavLink {
   standalone: true,
   imports: [
     RouterOutlet, RouterLink, RouterLinkActive, MatToolbarModule, MatButtonModule, MatIconModule,
-    MatMenuModule, MatSidenavModule, MatTooltipModule, HelperWidgetComponent, ServerDownComponent,
+    MatMenuModule, MatSidenavModule, MatTooltipModule,
+    HelperWidgetComponent, ServerDownComponent,
     AvatarComponent
   ],
   templateUrl: './app.component.html',
@@ -41,6 +41,10 @@ export class AppComponent {
 
   /** The nav drawer, for widths where the links cannot sit in the bar. */
   readonly drawerOpen = signal(false);
+
+  /** True while the router is fetching and activating a page. Starts true because the first
+   * navigation is already under way by the time this component exists. */
+  readonly navigating = signal(true);
 
   /** Drives the page cross-fade: a new value on every navigation runs the `routeFade` transition.
    * Held constant when the reader asked for less motion, so no transition ever fires. */
@@ -86,13 +90,28 @@ export class AppComponent {
   });
 
   constructor() {
-    // A drawer left open across a navigation covers the page it just opened.
-    this.router.events
-      .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
-      .subscribe(event => {
+    // This component only exists once the session check in APP_INITIALIZER has come back, so
+    // reaching here is the signal that index.html's loading splash has done its job.
+    document.querySelector('.app-splash')?.remove();
+
+    this.router.events.subscribe(event => {
+      if (event instanceof NavigationStart) {
+        this.navigating.set(true);
+        return;
+      }
+      // Cancelled and failed navigations end the wait too — otherwise a guard that redirects
+      // nowhere would leave the spinner turning over an empty page for good.
+      if (event instanceof NavigationCancel || event instanceof NavigationError) {
+        this.navigating.set(false);
+        return;
+      }
+      if (event instanceof NavigationEnd) {
+        this.navigating.set(false);
+        // A drawer left open across a navigation covers the page it just opened.
         this.drawerOpen.set(false);
         if (!this.reduceMotion) this.routeKey.set(event.urlAfterRedirects.split('?')[0]);
-      });
+      }
+    });
   }
 
   /** Where the account menu's "Profile" link points, or null for roles without a profile page. */
