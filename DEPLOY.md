@@ -141,6 +141,23 @@ The double underscore is not a typo: that is how .NET maps a flat environment va
 nested `Seed:AdminPassword` config key. A single underscore silently does nothing and the app
 fail-fasts at startup.
 
+### Optionally, the AI helper's key
+
+With this set, the helper answers from the asking student's own courses, lessons and marks; without
+it, it answers from `helper-intents.json` exactly as it always has. Unlike the admin secret, its
+absence is **not** fatal — the app boots either way and logs which path it took.
+
+```powershell
+fly secrets set Ai__ApiKey=AIza...
+```
+
+Same double underscore, same reason. Vercel needs nothing: the key never reaches the browser, and
+`/api/*` is a rewrite to Fly.
+
+**To turn the feature off in production without a deploy:** `fly secrets unset Ai__ApiKey`. The
+machine restarts, logs `AI helper disabled: Ai:ApiKey is not set`, and answers from the phrase
+list. That is the rollback plan, and it is one command.
+
 ---
 
 ## Step 5 — Deploy
@@ -278,6 +295,7 @@ form from bash does not exist here, and would be read as a command name.
 | Shell into the machine | `fly ssh console` |
 | Check status and cost drivers | `fly status`, `fly scale show` |
 | Re-seed from scratch | Step 6 again |
+| Turn the AI helper off | `fly secrets unset Ai__ApiKey` — the helper drops to the phrase list on restart |
 | Stop paying | `fly apps destroy teaching-learning-platform` and `fly volumes destroy` — the volume bills even while stopped |
 
 ---
@@ -292,6 +310,7 @@ form from bash does not exist here, and would be read as a command name.
 | Deploy fails: *volume not found* / machine won't start | Volume missing, or in a different region from `primary_region` | `fly volumes list`; recreate in the right region (Step 3) |
 | App exits: *Missing required secrets Seed:AdminEmail / Seed:AdminPassword* | The secret was never set, or has a single underscore | `fly secrets list`; re-run Step 4 |
 | Home page shows 0 teachers, 0 lessons | Demo data never seeded | Step 6 |
+| The helper answers from the phrase list even though a key is set | The key is wrong, quota is exhausted, or the secret has a single underscore | `fly logs` — startup logs whether the AI helper is enabled, and each failed call logs a warning; `fly secrets list`, then re-set `Ai__ApiKey` |
 | Data resets on every deploy | `Seed__Demo` is still set | `fly secrets unset Seed__Demo` |
 | Data appears to change at random between page loads | More than one machine is running | `fly scale count 1` |
 | Vercel build succeeds but the site is blank or 404 | Root Directory not set to `client/web` | Vercel → Settings → General → Root Directory |

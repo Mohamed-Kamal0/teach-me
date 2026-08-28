@@ -107,10 +107,12 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
             subscriptSizing="dynamic"
           >
             <mat-label>Ask a question</mat-label>
+            <!-- Matches the server's cap, so the limit is an affordance rather than a 400. -->
             <input
               matInput
               [(ngModel)]="question"
               name="question"
+              maxlength="300"
               autocomplete="off"
             />
           </mat-form-field>

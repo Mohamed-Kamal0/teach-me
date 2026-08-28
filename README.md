@@ -36,6 +36,22 @@ dotnet user-secrets set "Seed:AdminEmail"    "admin@teacherslessons.test"
 dotnet user-secrets set "Seed:AdminPassword" "Admin1234"
 ```
 
+#### Optionally, a third: the AI helper's key
+
+The helper answers from the asking student's own courses, lessons and marks when a Gemini key is
+configured, and from `helper-intents.json` when it is not. **Its absence is not fatal** — unlike the
+two above, this secret has an excellent fallback, so the app boots either way and logs which path it
+took. Get a key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey):
+
+```bash
+# from server/TeachersLessons.Api
+dotnet user-secrets set "Ai:ApiKey" "AIza..."
+```
+
+Everything else lives in `appsettings.json` under `Ai` — model, token cap, timeout, question-length
+cap and the per-student rate limit. See [`ai.md`](ai.md) for why the model is only ever shown data
+the student's own screens would already return.
+
 ### 2. Create the database and load the demo data
 
 ```bash
@@ -153,7 +169,7 @@ cd server
 dotnet test
 ```
 
-Thirty-eight tests across the suites that a click-through cannot give you confidence in:
+Fifty-two tests across the suites that a click-through cannot give you confidence in:
 
 | Suite                             | What it defends                                                                                                                                           |
 | :-------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -162,10 +178,25 @@ Thirty-eight tests across the suites that a click-through cannot give you confid
 | **C** — `TimingEnforcementTests`  | An unopened quiz has **no `quizUrl` key in the raw JSON** — asserted on the response string, because a missing key and a null key deserialise identically |
 | **D** — `OwnershipIsolationTests` | A teacher cannot reach another teacher's lesson (404); a student cannot read a course they never joined (**403**, not an empty list); a student profile shows the calling teacher's marks and lesson count only |
 | **F** — `PublicDirectoryTests`    | The anonymous directory answers without a session, lists **approved teachers only**, and its raw body carries neither an email nor a join code; a teacher photo is public only while that teacher is approved |
+| **G** — `AiHelperTests`           | The AI helper's context pack **excludes an unopened lesson and carries no URL at all** — asserted on the serialised pack, in suite C's style; one student's pack never mentions another; and every failure path (no key, a model that throws, times out, returns unparseable JSON, invents a route, or is rate-limited) answers **200 with the phrase-list answer**, never a 5xx |
 
 The tests run against **`Microsoft.Data.Sqlite`** in shared-cache in-memory mode, never EF Core's
 InMemory provider — that provider ignores unique indexes, so suite B would pass whether or not the
 constraint it is testing exists.
+
+Suite G injects a fake at `IAnswerModel`, the one seam between the helper and a model vendor, so no
+test in CI spends a cent or needs a network. `AiHelperLiveTests` is the single exception, skipped
+unless you ask for it — it exists so a real key is exercised before a demo, not during one. It
+reads the key from `Ai:ApiKey` in user-secrets (or `GEMINI_API_KEY` if you'd rather pass it in):
+
+```bash
+cd server
+HELPER_LIVE=1 dotnet test -l "console;verbosity=detailed"
+```
+
+It asserts that the *model* answered, not merely that the endpoint did — every failure path here
+degrades to the phrase list with a 200, so a test that only read the response body would pass with
+a dead key. `verbosity=detailed` prints the sentence it actually wrote and the tokens it billed.
 
 ### Browser smoke test (optional)
 
@@ -213,8 +244,9 @@ server/TeachersLessons.Api/
   Features/     Auth · Admin · Teacher · Student · Public · Helper — controller + DTOs + validators
   Common/       CurrentUser, policies, antiforgery, ProblemDetails middleware, VisibleTo projection
   Migrations/
-  helper-intents.json     the Req 18 phrase list — content, not code
-server/TeachersLessons.Api.Tests/    the four suites above
+  helper-intents.json       the Req 18 phrase list — content, not code, and the helper's floor
+  helper-system-prompt.md   the AI helper's instructions — content too, for the same reason
+server/TeachersLessons.Api.Tests/    the suites above
 client/web/src/app/
   core/         auth service, interceptors, guards, models
   shared/       StatePanelComponent (loading | error | empty), MediaEmbedComponent, dialogs

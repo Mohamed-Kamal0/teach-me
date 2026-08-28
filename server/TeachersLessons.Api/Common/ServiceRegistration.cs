@@ -1,5 +1,6 @@
 using TeachersLessons.Api.Features.Admin.Services;
 using TeachersLessons.Api.Features.Auth.Services;
+using TeachersLessons.Api.Features.Helper;
 using TeachersLessons.Api.Features.Helper.Services;
 using TeachersLessons.Api.Features.Public.Services;
 using TeachersLessons.Api.Features.Student.Services;
@@ -14,7 +15,7 @@ namespace TeachersLessons.Api.Common;
 /// </summary>
 public static class ServiceRegistration
 {
-    public static IServiceCollection AddFeatureServices(this IServiceCollection services)
+    public static IServiceCollection AddFeatureServices(this IServiceCollection services, IConfiguration configuration)
     {
         // Auth
         services.AddScoped<IAuthService, AuthService>();
@@ -41,9 +42,29 @@ public static class ServiceRegistration
         services.AddScoped<IPublicDirectoryService, PublicDirectoryService>();
         services.AddScoped<IHealthService, HealthService>();
 
-        // Helper — the intents are read from disk once, so the provider is a singleton.
+        // Helper — the intents and the system prompt are read from disk once, so both providers
+        // are singletons, as is the per-student rate limiter's window.
         services.AddSingleton<IHelperIntentProvider, HelperIntentProvider>();
-        services.AddScoped<IHelperService, HelperService>();
+        services.AddSingleton<IHelperSystemPrompt, HelperSystemPromptProvider>();
+        services.AddSingleton<IHelperRateLimiter, HelperRateLimiter>();
+        services.AddScoped<HelperService>();                 // the fallback, always registered
+        services.AddScoped<IStudentContextPackBuilder, StudentContextPackBuilder>();
+
+        services.Configure<AiOptions>(configuration.GetSection(AiOptions.SectionName));
+
+        // Which implementation answers is decided once, here. With no key the graph does not even
+        // contain the AI path, so `fly secrets unset Ai__ApiKey` is a complete rollback.
+        var ai = configuration.GetSection(AiOptions.SectionName).Get<AiOptions>() ?? new AiOptions();
+        if (ai.IsUsable)
+        {
+            services.AddSingleton(_ => new Google.GenAI.Client(apiKey: ai.ApiKey));
+            services.AddScoped<IAnswerModel, GeminiAnswerModel>();
+            services.AddScoped<IHelperService, AiHelperService>();   // wraps HelperService
+        }
+        else
+        {
+            services.AddScoped<IHelperService>(sp => sp.GetRequiredService<HelperService>());
+        }
 
         return services;
     }

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Serilog;
 using TeachersLessons.Api.Common;
 using TeachersLessons.Api.Data;
+using TeachersLessons.Api.Features.Helper;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -43,7 +44,7 @@ builder.Services.AddScoped<IPasswordHasher<TeachersLessons.Api.Domain.User>, Pas
 
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 builder.Services.AddSingleton<IAvatarImageProcessor, AvatarImageProcessor>();
-builder.Services.AddFeatureServices();
+builder.Services.AddFeatureServices(builder.Configuration);
 
 // Always in every environment that actually terminates TLS; SameAsRequest only so `dotnet run`
 // over plain http in local dev doesn't refuse to set the cookie at all.
@@ -120,6 +121,19 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// The key is optional by design: an app that refuses to boot because an *optional enhancement*
+// is unconfigured is a worse app, and this one has an excellent fallback.
+var aiOptions = builder.Configuration.GetSection(AiOptions.SectionName).Get<AiOptions>() ?? new AiOptions();
+if (aiOptions.IsUsable)
+{
+    app.Logger.LogInformation("AI helper enabled ({Model}).", aiOptions.Model);
+}
+else
+{
+    app.Logger.LogInformation(
+        "AI helper disabled: Ai:ApiKey is not set; the helper will answer from helper-intents.json.");
+}
 
 // ---- `dotnet run -- seed --demo` ------------------------------------------
 

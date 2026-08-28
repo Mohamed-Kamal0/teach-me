@@ -7,8 +7,14 @@ public interface IHelperService
 
 public class HelperService(IHelperIntentProvider intents, AppDbContext db, ICurrentUser currentUser) : IHelperService
 {
-    /// <summary>Answers that send the student into a course make no sense before they join one.</summary>
-    private static readonly string[] CourseDependentRoutes = ["/student/courses", "/student/whats-new", "/student/marks"];
+    /// <summary>
+    /// Answers that send the student into a course make no sense before they join one. Internal
+    /// rather than private only so AiHelperService applies the same list to the model's answer —
+    /// one rule, one place.
+    /// </summary>
+    internal static readonly string[] CourseDependentRoutes = ["/student/courses", "/student/whats-new", "/student/marks"];
+
+    internal const string NoCoursesAnswer = "You're not on any course yet — enter your teacher's joining code to get started.";
 
     public async Task<HelperAnswerResponse> AskAsync(string? question, CancellationToken ct)
     {
@@ -41,7 +47,7 @@ public class HelperService(IHelperIntentProvider intents, AppDbContext db, ICurr
             if (!hasCourses)
             {
                 route = "/student/join";
-                answer = "You're not on any course yet — enter your teacher's joining code to get started.";
+                answer = NoCoursesAnswer;
             }
         }
 
