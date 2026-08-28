@@ -138,7 +138,14 @@ public static class DemoSeeder
         var student2 = MakeUser("student.two@demo.test", "Omar Tarek", UserRole.Student);
         db.Users.AddRange(student1, student2);
 
-        var studentProfile1 = new Student { UserId = student1.Id, DisplayName = "Nourhan" };
+        var studentProfile1 = new Student
+        {
+            UserId = student1.Id,
+            DisplayName = "Nourhan",
+            Phone = "+20 100 555 0142",
+            DateOfBirth = new DateOnly(2004, 3, 18),
+            Bio = "Second-year student, revising for finals."
+        };
         var studentProfile2 = new Student { UserId = student2.Id };
         db.Students.AddRange(studentProfile1, studentProfile2);
 

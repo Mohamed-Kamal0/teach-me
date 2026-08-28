@@ -167,6 +167,8 @@ export interface Profile {
   displayName: string | null;
   phone: string | null;
   bio: string | null;
+  /** A calendar date, `yyyy-MM-dd` — the server's `DateOnly`, with no time and no zone. */
+  dateOfBirth: string | null;
   photoETag: string | null;
   courses: CourseMembership[];
 }

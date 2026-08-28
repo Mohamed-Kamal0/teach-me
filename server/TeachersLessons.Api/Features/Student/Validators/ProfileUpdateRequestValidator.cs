@@ -16,6 +16,15 @@ public class ProfileUpdateRequestValidator : AbstractValidator<ProfileUpdateRequ
         RuleFor(x => x.Bio)
             .MaximumLength(500).WithMessage("Keep your bio under 500 characters.");
 
+        // A birthday that has not happened yet is a typo, and one from the 1800s is a slipped
+        // digit in the year. Both are worth catching here rather than storing and rendering.
+        RuleFor(x => x.DateOfBirth)
+            .Must(d => d!.Value <= DateOnly.FromDateTime(DateTime.UtcNow))
+                .WithMessage("Your date of birth can't be in the future.")
+            .Must(d => d!.Value.Year >= 1900)
+                .WithMessage("Enter a date of birth after 1900.")
+            .When(x => x.DateOfBirth.HasValue);
+
         // Not on the form — and the server refuses it too if a client posts them anyway.
         RuleFor(x => x.Email).Null().WithMessage("Your email can't be changed here.");
         RuleFor(x => x.FullName).Null().WithMessage("Your email can't be changed here.");

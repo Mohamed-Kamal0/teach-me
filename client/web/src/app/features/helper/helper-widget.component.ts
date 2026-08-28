@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, ElementRef, Injector, ViewChild, afterNextRender, inject, signal } from '@angular/core';
 import { animate, style, transition, trigger } from '@angular/animations';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -51,8 +51,9 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
         <div class="panel-header">
           <span>Helper</span>
           <button
+            #panelClose
             mat-icon-button
-            (click)="open.set(false)"
+            (click)="close()"
             aria-label="Close helper"
           >
             <mat-icon>close</mat-icon>
@@ -129,10 +130,12 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
     }
 
     <button
+      #fabButton
       mat-fab
       color="primary"
       class="fab"
-      (click)="open.set(!open())"
+      [class.fab--covered]="open()"
+      (click)="toggle()"
       [attr.aria-label]="open() ? 'Close helper' : 'Open helper'"
       [attr.aria-expanded]="open()"
     >
@@ -231,7 +234,9 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
       .panel-form {
         display: flex;
         gap: 0.5rem;
-        padding: 0.75rem 1rem 1rem;
+        /* As a sheet this row is the last thing above the edge of the screen, which on a phone
+           is where the home indicator lives. */
+        padding: 0.75rem 1rem max(1rem, env(safe-area-inset-bottom));
         align-items: center;
         border-top: 1px solid var(--rule);
       }
@@ -255,11 +260,23 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
           bottom: 1rem;
           right: 1rem;
         }
+        /* The sheet reaches the bottom of the screen, so the button's corner is inside it — it
+           was landing on the "Ask" button and clipping the question box. The sheet's own header
+           carries a close control, so while it is open the floating one has nothing left to do. */
+        .fab--covered {
+          display: none;
+        }
       }
     `,
   ],
 })
 export class HelperWidgetComponent {
+  // `read: ElementRef` is not optional here: both refs sit on Material buttons, and a template
+  // ref on a component resolves to the component instance unless told otherwise — which has no
+  // nativeElement, so the focus call below would silently do nothing.
+  @ViewChild('fabButton', { read: ElementRef }) private fabButton?: ElementRef<HTMLButtonElement>;
+  @ViewChild('panelClose', { read: ElementRef }) private panelClose?: ElementRef<HTMLButtonElement>;
+
   open = signal(false);
   question = '';
   result = signal<HelperAnswer | null>(null);
@@ -273,6 +290,33 @@ export class HelperWidgetComponent {
 
   private http = inject(HttpClient);
   private router = inject(Router);
+  private injector = inject(Injector);
+
+  /**
+   * Opening the sheet on a phone hides the button that was just pressed, so focus has to be
+   * handed to the panel rather than dropped on the body — a reader tabbing from nowhere starts
+   * again at the top of the page. Closing hands it back to the button they came from.
+   *
+   * Both wait for a render rather than a timeout: change detection is coalesced in this app, so
+   * a timer can fire while the panel is still not in the DOM and the button is still hidden.
+   */
+  toggle(): void {
+    if (this.open()) {
+      this.close();
+      return;
+    }
+    this.open.set(true);
+    this.focusAfterRender(() => this.panelClose?.nativeElement);
+  }
+
+  close(): void {
+    this.open.set(false);
+    this.focusAfterRender(() => this.fabButton?.nativeElement);
+  }
+
+  private focusAfterRender(target: () => HTMLElement | undefined): void {
+    afterNextRender(() => target()?.focus(), { injector: this.injector });
+  }
 
   ask(): void {
     const question = this.question.trim();

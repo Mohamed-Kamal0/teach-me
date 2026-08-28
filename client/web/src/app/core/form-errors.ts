@@ -89,6 +89,12 @@ function describe(errors: ValidationErrors, label: string, overrides: MessageOve
       case 'min': return `Enter ${errors['min'].min} or more.`;
       case 'max': return `Enter ${errors['max'].max} or less.`;
       case 'pattern': return `${label} isn't in the expected format.`;
+      // A datepicker names its failures after itself rather than after the generic min/max
+      // rules, so without these a field can be invalid — blocking submit — with nothing said.
+      case 'matDatepickerMin': return `${label} is earlier than the earliest date allowed.`;
+      case 'matDatepickerMax': return `${label} is later than the latest date allowed.`;
+      case 'matDatepickerParse': return `${label} isn't a date that can be read.`;
+      case 'matDatepickerFilter': return `${label} isn't a date that can be chosen.`;
       default: break;
     }
   }

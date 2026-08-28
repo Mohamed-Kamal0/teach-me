@@ -25,6 +25,7 @@ public class StudentProfileService(
         student.DisplayName = Optional(request.DisplayName);
         student.Phone = Optional(request.Phone);
         student.Bio = Optional(request.Bio);
+        student.DateOfBirth = request.DateOfBirth;
 
         await db.SaveChangesAsync(ct);
 
@@ -47,7 +48,10 @@ public class StudentProfileService(
             .OrderBy(c => c.JoinedAtUtc)
             .ToList();
 
-        return new ProfileDto(user.Id, user.Email, user.FullName, student.DisplayName, student.Phone, student.Bio, photoETag, courses);
+        return new ProfileDto(
+            user.Id, user.Email, user.FullName,
+            student.DisplayName, student.Phone, student.Bio, student.DateOfBirth,
+            photoETag, courses);
     }
 
     private static string? Optional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

@@ -142,6 +142,9 @@ _Added 2026-08-28. Everything above is the client's brief as given, unchanged. E
 | **A student profile for the teacher**   | [`discover.md`](discover.md) | The teacher's student row opens a person, not a dead end: details, photo, and their marks in lesson order.     |
 | **The helper became an AI**             | [`ai.md`](ai.md)             | It answers from the asking student's own courses, lessons and marks — with the phrase list still underneath.   |
 | **Resetting your own password**         | [`plan.md` §12.4](plan.md)   | `PUT /api/me/password` — the current password is the proof of identity, so no mail has to leave the app.        |
+| **A date of birth on the profile**      | [`plan.md` §3, §5](plan.md)  | A fourth editable field on the student's own row, picked off a calendar and stored as a `DateOnly`.            |
+
+The last of those is the smallest, and the only one that changes a requirement's own screen rather than adding a new one. Req 6 names *"the parts they may change"* without listing them, so a fourth editable field is inside the brief rather than beyond it — and the line that matters is untouched: what may **not** be changed is still absent from the form *and* from the request.
 
 ### The one line of this brief that no longer holds
 

@@ -424,11 +424,41 @@ a:hover { text-decoration-thickness: 2px; }
 // padding never applied. 1rem clears the label's overhang and still leaves a visible gap.
 .mat-mdc-card .mat-mdc-card-header { padding-bottom: 1rem; }
 
+// Material reserves exactly one line beneath a field for its hint or error and pins that line
+// absolutely, so a hint that wraps — which on a phone most of them do — spills out of the space
+// reserved for it and lands on the floating label of the field below. Standing the subscript in
+// the flow with a one-line minimum keeps the old rhythm when the text fits and opens the gap when
+// it doesn't. This is `subscriptSizing="dynamic"` done once instead of on every field.
+// Qualified for the same reason as the card header above: Material's own stylesheet is injected
+// after this one, so an equal-specificity selector would lose the cascade.
+// The `:not()` matters: a field that opted into `subscriptSizing="dynamic"` asked for no
+// reserved line at all, and giving it one back puts a band of empty space under it. Material
+// marks the wrapper itself, not the field, so the class sits on the same element.
+.mat-mdc-form-field .mat-mdc-form-field-subscript-wrapper:not(.mat-mdc-form-field-subscript-dynamic-size) {
+  min-height: 1.25rem;
+  // An outlined field draws its floating label above its own box, so the field below needs
+  // headroom that the 0.5rem gap between fields does not by itself provide: with a wrapped hint
+  // standing in the flow, the two were landing within a pixel of each other.
+  padding-bottom: 0.5rem;
+}
+.mat-mdc-form-field .mat-mdc-form-field-hint-wrapper,
+.mat-mdc-form-field .mat-mdc-form-field-error-wrapper { position: static; }
+.mat-mdc-form-field .mat-mdc-form-field-bottom-align::before { content: none; }
+
 // Form fields sit on paper so a card and its inputs read as one object.
 .mat-mdc-form-field { width: 100%; }
 .mat-mdc-text-field-wrapper { background: var(--paper); border-radius: var(--radius-sm); }
 .mat-mdc-form-field-error { font-size: var(--step--1); }
 .mat-mdc-form-field-subscript-wrapper { font-size: var(--step--1); }
+
+// The calendar renders in the CDK overlay too. M3's generated elevation for it comes out as a
+// shadow with no offset and no blur — invisible — which leaves a pale panel sitting on a pale
+// page with nothing to say it is floating above it.
+.mat-datepicker-content {
+  border-radius: var(--radius-sm) !important;
+  box-shadow: var(--shadow-2) !important;
+  border: 1px solid var(--border);
+}
 
 // Toasts render in the CDK overlay, outside every component, so their skin lives here.
 .toast .mdc-snackbar__surface {

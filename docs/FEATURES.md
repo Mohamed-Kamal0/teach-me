@@ -155,6 +155,23 @@ control.valueChanges.pipe(take(1)).subscribe(() => clearServerError(control));
 Anything the server names that has no matching control is handed back to the caller and shown as a
 banner, so a message is never silently dropped.
 
+**A rule with no sentence is worse than no rule.** `describe()` turns a control's error keys into
+wording, and a key it does not know returns `null` — which shows nothing while the form stays
+invalid, so submit refuses and never says why. That is why the datepicker's keys are in the switch
+alongside `required` and `maxlength`: a datepicker names its failures `matDatepickerMax`,
+`matDatepickerParse` and so on rather than reusing the generic `min`/`max`. Where the client rule
+and a server rule are the same rule, the screen passes an override so both say the same sentence —
+the date of birth field's `matDatepickerMax` is worded *"Your date of birth can't be in the
+future."*, which is what the API answers for the same value.
+
+**And the sentence needs room to be read.** Material reserves exactly one line beneath a field for
+its hint or error and positions that line absolutely, so a message that wraps — which on a phone
+most of them do — spilled out of its reserved space and landed on the floating label of the field
+below it. `_theme.scss` stands the subscript in the flow with a one-line minimum and a little
+padding beneath, which keeps the old spacing when the text fits and opens the gap when it does not.
+It is `subscriptSizing="dynamic"` written once for every form in the app rather than on every
+field.
+
 ### 0.4 Status codes mean one thing each
 
 | Code    | Means                                                            | Example                                                          |
@@ -348,7 +365,7 @@ there is a course**: it shows the profile and points at the joining screen.
 **The call:** `POST /api/auth/register/student` → **201**
 
 **The server:** the same identity path as above — one `User` row, role `Student` — plus an empty
-`Student` row (display name, phone, bio, all null). **No enrollment is created.** Belonging to
+`Student` row (display name, phone, date of birth, bio, all null). **No enrollment is created.** Belonging to
 nobody is the default state, not an error state.
 
 **When it fails:** **400**, email in use by anybody.
@@ -951,11 +968,30 @@ told so **and pointed at the joining screen**.
 
 **The calls:** `GET /api/student/profile` · `PUT /api/student/profile` → **200**
 
-**What may be changed, and what may not.** `DisplayName`, `Phone`, `Bio` live on the `Students` row
-and are editable. **Email, full name and role are not there at all** — they live on `Users`. That is
-the brief's *"what they may not change is not on the form — and the server refuses it anyway"*
-implemented structurally: the update request has no field for them, and the service writes only three
-properties, so there is nothing to refuse because there is nothing to send.
+**What may be changed, and what may not.** `DisplayName`, `Phone`, `DateOfBirth`, `Bio` live on the
+`Students` row and are editable. **Email, full name and role are not there at all** — they live on
+`Users`. That is the brief's *"what they may not change is not on the form — and the server refuses
+it anyway"* implemented structurally: the update request has no field for them, and the service
+writes only the four properties, so there is nothing to refuse because there is nothing to send.
+
+**The date of birth is a `DateOnly`**, not a `DateTimeOffset`: a birthday is a calendar date, so it
+never goes through the UTC conversion every instant in this model goes through, and it cannot shift a
+day when the reader is in a different zone. **The day is picked off a calendar, not typed** — the box
+is readonly and opens a Material datepicker whose `startView` is the year grid, because a birthday is
+decades back and a month-by-month walk to 1998 is a hundred clicks. The calendar is capped at today,
+the server refuses a future date and any year before 1900, and an empty box is sent as `null` rather
+than `""`, which would fail to bind at all. The Date the calendar returns is converted to and from
+`yyyy-MM-dd` **on local calendar parts, never `toISOString()`** — that converts to UTC first and
+moves the birthday a day west of Greenwich.
+
+**Saving re-reads rather than assumes.** The `PUT` answers with the stored row, and the page takes
+that answer as the truth: the identity band at the top of the screen shows the saved display name,
+phone, date of birth and bio back, **each row led by its own icon** — filled-in facts only, so a blank
+field leaves no empty label — and
+the form is re-seeded from the same response, so a value the server trimmed or blanked shows as
+stored rather than as typed. `GET /api/me` is re-read alongside it, because the name and photo in
+that band come from the session and not from this response; without it the card would show the new
+details under a stale name.
 
 ### 4.2 Joining a course with a code
 

@@ -6,12 +6,12 @@ public record CourseMembershipDto(Guid TeacherUserId, string TeacherFullName, Da
 
 public record ProfileDto(
     Guid UserId, string Email, string FullName,
-    string? DisplayName, string? Phone, string? Bio,
+    string? DisplayName, string? Phone, string? Bio, DateOnly? DateOfBirth,
     string? PhotoETag,
     List<CourseMembershipDto> Courses);
 
 public record ProfileUpdateRequest(
-    string? DisplayName, string? Phone, string? Bio,
+    string? DisplayName, string? Phone, string? Bio, DateOnly? DateOfBirth,
     string? Email = null, string? FullName = null, string? Role = null);
 
 public record JoinCourseRequest(string Code);

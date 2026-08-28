@@ -118,12 +118,15 @@ The enum **plus** `DecidedAtUtc` is deliberate: a pair of nullable dates could r
 
 ### `Students` — a student's profile
 
-| Column        | Type            | Notes                          |
-| :------------ | :-------------- | :----------------------------- |
-| `UserId`      | `Guid`          | **PK = FK to `Users.Id`**, 1:1 |
-| `DisplayName` | `string?` (120) | editable by the student        |
-| `Phone`       | `string?` (30)  | editable                       |
-| `Bio`         | `string?` (500) | editable                       |
+| Column        | Type            | Notes                                         |
+| :------------ | :-------------- | :-------------------------------------------- |
+| `UserId`      | `Guid`          | **PK = FK to `Users.Id`**, 1:1                |
+| `DisplayName` | `string?` (120) | editable by the student                       |
+| `Phone`       | `string?` (30)  | editable                                      |
+| `DateOfBirth` | `DateOnly?`     | editable; a calendar date, **not an instant** |
+| `Bio`         | `string?` (500) | editable                                      |
+
+`DateOfBirth` is the one date in this model that is **not** a `DateTimeOffset`. Every other one marks a moment — when a lesson opens, when a mark was recorded — and §3's convention converts those to UTC on the way in so that comparisons translate in SQLite. A birthday is not a moment: it does not move when the reader does, and putting it through that conversion would let it land a day earlier for anybody west of Greenwich. `DateOnly` has no time and no zone, so there is nothing to convert and nothing to shift. The client honours the same rule — it formats and parses `yyyy-MM-dd` from local calendar parts, never through `toISOString()`.
 
 Email, full name, and role are **not** here — they live on `Users` and are not editable, which is exactly Req 6's _"what they may not change is not on the form — and the server refuses it anyway."_
 
@@ -385,8 +388,12 @@ Two deliberate differences from sign-in:
 | :------------------------ | :-------------------------------------------------- | :----------------------------------------- |
 | `displayName`             | optional, ≤120                                      | "Display name is too long."                |
 | `phone`                   | optional, ≤30, digits/space/`+`/`-`/`(`/`)` only    | "Enter a phone number, or leave it blank." |
+| `dateOfBirth`             | optional, **not in the future**                     | "Your date of birth can't be in the future." |
+| `dateOfBirth`             | optional, year **≥ 1900**                           | "Enter a date of birth after 1900."        |
 | `bio`                     | optional, ≤500                                      | "Keep your bio under 500 characters."      |
 | `email` `fullName` `role` | **not on the form**, and rejected if posted → `400` | "Your email can't be changed here."        |
+
+The two date rules are the only ones on this form a person cannot reach through the screen: the field is a **calendar, not a text box** — readonly, opened by tapping, capped at today, and starting on the year grid because a birthday is decades back. They are still server rules, because a form is a convenience and not a boundary. Where the client can restate one it uses the server's own sentence, so *"Your date of birth can't be in the future."* is one string whichever half refuses it. An empty box is sent as `null`, never `""` — the latter would fail to bind to `DateOnly?` and come back as a framework message rather than one of these.
 
 ### Lesson create and edit (Reqs 8, 9)
 
