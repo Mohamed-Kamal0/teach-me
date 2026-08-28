@@ -39,7 +39,8 @@ public class AuthService(
         {
             UserId = user.Id,
             JoinCode = await GenerateUniqueJoinCode(ct),
-            Status = TeacherStatus.Pending
+            Status = TeacherStatus.Pending,
+            Subject = request.Subject.Trim()
         });
 
         await db.SaveChangesAsync(ct);
@@ -65,10 +66,13 @@ public class AuthService(
         var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
 
         // One message for both "no such account" and "wrong password" — nothing here tells a
-        // caller whether an email is registered.
+        // caller whether an email is registered. It is named after the pair rather than after
+        // `email` for the same reason: a key is a field name, and naming one of the two blames
+        // the half we have no reason to think is wrong. `credentials` matches no box on the form,
+        // so the client shows it over the form, which is where an answer about both belongs.
         if (user is null || passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password) == PasswordVerificationResult.Failed)
         {
-            throw new ValidationApiException("email", "Email or password is incorrect.");
+            throw new ValidationApiException("credentials", "Email or password is incorrect.");
         }
 
         var identity = new ClaimsIdentity(

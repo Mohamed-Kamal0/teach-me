@@ -53,6 +53,16 @@ function passwordsMatch(control: AbstractControl): ValidationErrors | null {
                 @if (message('email', 'Email'); as msg) { <mat-error>{{ msg }}</mat-error> }
               </mat-form-field>
 
+              <!-- Asked for at registration rather than left to the profile screen: it is what
+                   the administrator reads before deciding, and what the directory is searched on
+                   the moment the account is approved. -->
+              <mat-form-field appearance="outline">
+                <mat-label>Subject you teach</mat-label>
+                <input matInput formControlName="subject" autocomplete="off" maxlength="60" />
+                <mat-hint>Mathematics, Biology, English Literature…</mat-hint>
+                @if (message('subject', 'Subject'); as msg) { <mat-error>{{ msg }}</mat-error> }
+              </mat-form-field>
+
               <mat-form-field appearance="outline">
                 <mat-label>Password</mat-label>
                 <input matInput [type]="reveal() ? 'text' : 'password'" formControlName="password"
@@ -124,11 +134,20 @@ export class RegisterTeacherComponent {
   form = this.fb.group({
     fullName: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(120)]],
     email: ['', [Validators.required, Validators.email]],
+    subject: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(60)]],
     password: ['', [Validators.required, Validators.minLength(8), Validators.pattern(/^(?=.*[A-Za-z])(?=.*\d).+$/)]],
     confirmPassword: ['', [Validators.required]]
   }, { validators: passwordsMatch });
 
   message(name: string, label: string): string | null {
+    if (name === 'subject') {
+      // The server's wording for this field, so the browser and the API say the same sentence.
+      return fieldMessage(this.form, name, label, {
+        required: 'Enter the subject you teach.',
+        minlength: 'Enter the subject you teach.',
+        maxlength: 'Enter the subject you teach, in 60 characters or fewer.'
+      });
+    }
     return fieldMessage(this.form, name, label, name === 'password' ? { pattern: PASSWORD_RULE, minlength: PASSWORD_RULE } : {});
   }
 
@@ -145,8 +164,8 @@ export class RegisterTeacherComponent {
     this.submitting.set(true);
     this.banner.set(null);
     try {
-      const { fullName, email, password } = this.form.getRawValue();
-      await this.auth.registerTeacher(fullName!, email!, password!);
+      const { fullName, email, password, subject } = this.form.getRawValue();
+      await this.auth.registerTeacher(fullName!, email!, password!, subject!);
       this.done.set(true);
     } catch (err) {
       this.banner.set(applyServerErrors(this.form, problemFrom(err)));

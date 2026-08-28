@@ -38,32 +38,62 @@ interface CardAction {
           [photoETag]="teacher.photoETag"></app-avatar>
         <div class="tcard__id">
           <h3 class="tcard__name">{{ teacher.fullName }}</h3>
-          <p class="tcard__since">Teaching since {{ teacher.memberSinceUtc | date: 'MMM y' }}</p>
+          <!-- The subject sits directly under the name because it is half of what the directory
+               is searched on — a result found by typing "Biology" should show why it matched.
+               Absent for a teacher who registered before the field existed, and the line is then
+               omitted rather than filled with a placeholder.
+
+               It is a chip rather than another grey line: on a card where every other line is
+               metadata, the one thing somebody searched for should not look like the date. -->
+          @if (teacher.subject) {
+            <p class="tcard__subject">
+              <mat-icon class="tcard__subject-icon" aria-hidden="true">menu_book</mat-icon>
+              <span>{{ teacher.subject }}</span>
+            </p>
+          }
+
         </div>
       </div>
 
       <dl class="tcard__stats">
+        <!-- The icon rides beside the number, not above the label: these labels already wrap to
+             two lines at a narrow card width — by design — and a third line between the figure
+             and the words it belongs to only separates the two. -->
         <div class="tcard__stat">
-          <dt class="tcard__value tabular-nums">{{ teacher.openLessonCount }}</dt>
+          <dt class="tcard__value tabular-nums">
+            <mat-icon aria-hidden="true">play_circle</mat-icon>{{ teacher.openLessonCount }}
+          </dt>
           <dd class="tcard__label">lessons open</dd>
         </div>
         <div class="tcard__stat">
-          <dt class="tcard__value tabular-nums">{{ teacher.studentCount }}</dt>
+          <dt class="tcard__value tabular-nums">
+            <mat-icon aria-hidden="true">group</mat-icon>{{ teacher.studentCount }}
+          </dt>
           <dd class="tcard__label">students</dd>
         </div>
         <div class="tcard__stat">
           <!-- "Nobody has sat a quiz yet" and "everybody failed" are not the same sentence, so a
                course with no marks gets an em dash and never 0%. -->
-          <dt class="tcard__value tabular-nums">{{ passRate() }}</dt>
+          <dt class="tcard__value tabular-nums">
+            <mat-icon aria-hidden="true">trending_up</mat-icon>{{ passRate() }}
+          </dt>
           <dd class="tcard__label">pass rate</dd>
         </div>
       </dl>
 
-      <p class="tcard__foot tabular-nums">
-        {{ teacher.publishedLessonCount }} lesson{{ teacher.publishedLessonCount === 1 ? '' : 's' }} published
-        <span aria-hidden="true"> · </span>
-        {{ teacher.markCount }} marked
-      </p>
+      <!-- The two facts that are about the course rather than about how it is going. They sit
+           together at the foot so the three figures above stay the thing the eye lands on. -->
+      <ul class="tcard__foot tabular-nums">
+        <li>
+          <mat-icon aria-hidden="true">library_books</mat-icon>
+          <span>{{ teacher.publishedLessonCount }} lesson{{ teacher.publishedLessonCount === 1 ? '' : 's' }} published
+            <span aria-hidden="true"> · </span>{{ teacher.markCount }} marked</span>
+        </li>
+        <li>
+          <mat-icon aria-hidden="true">event</mat-icon>
+          <span>Teaching since {{ teacher.memberSinceUtc | date: 'MMM y' }}</span>
+        </li>
+      </ul>
 
       @if (courseLink(); as link) {
         <a mat-flat-button color="primary" class="tcard__action" [routerLink]="link">
@@ -106,7 +136,30 @@ interface CardAction {
       margin: 0;
       overflow-wrap: anywhere;
     }
-    .tcard__since { margin: 0.15rem 0 0; color: var(--muted); font-size: var(--step--1); }
+    /* A chip, so the one searchable line on the card does not read as another date. The pill
+       keeps it clear of the name above it without needing a rule between the two. */
+    .tcard__subject {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      margin: 0.35rem 0 0;
+      padding: 0.15rem 0.55rem 0.15rem 0.4rem;
+      border-radius: 999px;
+      background: var(--primary-wash);
+      color: var(--primary);
+      font-weight: 600;
+      font-size: var(--step--1);
+      line-height: 1.35;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+    }
+    .tcard__subject-icon {
+      font-size: 15px;
+      width: 15px;
+      height: 15px;
+      flex: none;
+    }
+
 
     .tcard__stats {
       display: grid;
@@ -123,6 +176,10 @@ interface CardAction {
     }
     .tcard__stat { min-width: 0; }
     .tcard__value {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem;
       font-family: 'Lora', Georgia, serif;
       font-size: var(--step-2);
       font-weight: 600;
@@ -130,17 +187,42 @@ interface CardAction {
       color: var(--primary);
       margin: 0;
     }
+    /* Sized off the figure beside it rather than in pixels, so the icon keeps its proportion
+       when the fluid --step-2 grows on a wide screen. */
+    .tcard__value mat-icon {
+      font-size: 0.75em;
+      width: 0.75em;
+      height: 0.75em;
+      flex: none;
+      opacity: 0.65;
+    }
     .tcard__label {
-      margin: 0.3rem 0 0;
+      margin: 0.35rem 0 0;
       font-size: var(--step--1);
       color: var(--muted);
       line-height: 1.2;
     }
 
     .tcard__foot {
-      margin: 0.75rem 0 0.9rem;
+      list-style: none;
+      margin: 0.8rem 0 0.9rem;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
       color: var(--muted);
       font-size: var(--step--1);
+    }
+    .tcard__foot li { display: flex; align-items: flex-start; gap: 0.4rem; line-height: 1.3; }
+    /* flex:none so a wrapping second line does not squeeze the icon, and the nudge lines its
+       optical centre up with the first line of text rather than with the whole block. */
+    .tcard__foot mat-icon {
+      font-size: 15px;
+      width: 15px;
+      height: 15px;
+      flex: none;
+      margin-top: 0.05rem;
+      opacity: 0.8;
     }
     /* The auto top margin drops the button to the foot of the card, so a row of cards of
        unequal height still lines their buttons up along the bottom. */

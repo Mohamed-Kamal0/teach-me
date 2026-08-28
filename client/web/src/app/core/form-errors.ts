@@ -41,8 +41,15 @@ export function applyServerErrors(form: FormGroup, problem: ProblemDetails | nul
 
     control.setErrors({ ...(control.errors ?? {}), server: message });
     control.markAsTouched();
-    // The message describes what was sent, so it stops being true the moment the field changes.
-    control.valueChanges.pipe(take(1)).subscribe(() => clearServerError(control));
+  }
+
+  // The message describes the request that was sent, so it stops being true the moment *any*
+  // part of that request changes — not just the field it was pinned to. Watching the one control
+  // left a corrected form unable to submit: sign in with the wrong password and the message lands
+  // on `email`, so fixing the password cleared nothing, the form stayed invalid, and pressing the
+  // button did nothing until the email was touched. One subscription on the form, cleared whole.
+  if (entries.length > 0) {
+    form.valueChanges.pipe(take(1)).subscribe(() => clearServerErrors(form));
   }
 
   return unmatched.length ? unmatched.join(' ') : null;
@@ -112,7 +119,9 @@ function findControl(form: FormGroup, key: string): AbstractControl | null {
   return match ? form.controls[match] : null;
 }
 
-function clearServerErrors(form: FormGroup): void {
+/** Drops every message the server put on this form. Call it at the top of a submit: the answer
+ *  to a request is not a reason to refuse to send that request again. */
+export function clearServerErrors(form: FormGroup): void {
   Object.values(form.controls).forEach(clearServerError);
 }
 

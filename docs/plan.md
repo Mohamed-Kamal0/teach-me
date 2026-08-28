@@ -110,11 +110,14 @@ So **one `Users` table owns identity and the unique email**, and role-specific d
 | :---------------- | :------------------- | :---------------------------------------------------------------------- |
 | `UserId`          | `Guid`               | **PK = FK to `Users.Id`**, 1:1 — no separate identity                   |
 | `JoinCode`        | `string` (8)         | **unique index**; Crockford base32                                      |
+| `Subject`         | `string?` (60)       | what they teach; asked for at registration, searchable in the directory (§12.5) |
 | `Status`          | `TeacherStatus` enum | `Pending` · `Approved` · `Rejected`, stored as text                     |
 | `DecidedAtUtc`    | `DateTimeOffset?`    | null until the administrator decides — what makes "decided twice" a 409 |
 | `DecidedByUserId` | `Guid?`              | FK to `Users.Id`, **`Restrict`**                                        |
 
 The enum **plus** `DecidedAtUtc` is deliberate: a pair of nullable dates could represent "approved and rejected at once", and this cannot.
+
+`Subject` is **nullable even though every registration form requires it**, and that is not an oversight. Registration and the profile card both refuse a blank one, so no teacher who has been asked can go without — but the rows that existed before the column did were never asked, and backfilling them with `''` would record an answer nobody gave. Null says *not asked*; the card omits the line rather than printing a placeholder, and the directory search skips those rows rather than matching them on empty. It is 60 characters because this is a subject, not a syllabus: a free paragraph would make `?q=` match on the wrong half of a sentence.
 
 ### `Students` — a student's profile
 
@@ -238,11 +241,12 @@ The caller is always resolved from the **auth cookie**, never from the URL. Ever
 | `POST /api/auth/login`                              | anyone             | 200 `{role, teacherStatus?}` + `Set-Cookie` (nothing in the body) | 401 _"Email or password is incorrect"_ (never which half), 400 validation   |
 | `POST /api/auth/logout`                             | any signed-in      | 204 + cookie cleared                                              | —                                                                           |
 | `GET /api/public/home`                              | anyone, no cookie  | 200 `{approvedTeacherCount, lessonCount, howToJoin}`              | — must read `0` on an empty database                                        |
-| `GET /api/public/teachers?page=&pageSize=&q=`       | anyone, no cookie  | 200 paged `PublicTeacherDto` — **approved only**, open lessons desc then name | — legitimately empty (§12.2)                                    |
+| `GET /api/public/teachers?page=&pageSize=&q=`       | anyone, no cookie  | 200 paged `PublicTeacherDto` — **approved only**, open lessons desc then name; `q` matches **name or subject** | — legitimately empty (§12.2, §12.5)                |
 | `GET /api/public/teachers/{userId}/photo`           | anyone, no cookie  | 200 `image/webp` + `ETag`, `public, max-age=300` · 304 on `If-None-Match` | **404** for no photo **and** for a teacher who is not approved — identically (§12.2) |
 | `GET /api/health`                                   | anyone, no cookie  | 200 `{status, db}`                                                | 503 if the database is unreachable                                          |
 | `GET /api/me`                                       | any signed-in      | 200 identity + standing + `photoETag`                             | —                                                                           |
 | `PUT /api/me/password`                              | any signed-in      | 204 — nothing echoed back, session undisturbed                    | 400 wrong current password (named on `currentPassword`), 400 policy, 400 reuse (§12.4) |
+| `PUT /api/me/subject`                               | Teacher (**any standing**) | 204 — replaces one value with another; sending it twice changes nothing | 400 blank or over 60 chars, **403 not a teacher** (§12.5) |
 | `PUT /api/me/photo` (multipart `file`)              | any signed-in      | 200 `{photoETag, updatedAtUtc}` — re-encoded to 256×256 WebP      | 400 not an image / undecodable / wrong content type, **413 over 5 MB** (§12.1) |
 | `DELETE /api/me/photo`                              | any signed-in      | 204 — idempotent; 204 even when there was none                    | —                                                                           |
 | `GET /api/users/{userId}/photo`                     | any signed-in      | 200 `image/webp` + `ETag`, `private, max-age=300` · 304           | 404 no photo                                                                |
@@ -342,6 +346,9 @@ The brief requires _"every validation rule and the message a human reads"_. Thre
 | `email`           | **not in use by anybody — teacher, student, or the administrator** → `400` | "That email is already registered. Sign in instead?"     |
 | `password`        | required, ≥8 chars, at least one letter and one digit                      | "Use at least 8 characters, with a letter and a number." |
 | `confirmPassword` | must match `password` — **client only, caught before the server**          | "Those passwords don't match."                           |
+| `subject`         | **teacher only**; required, 2–60 chars, trimmed                            | "Enter the subject you teach." / "… in 60 characters or fewer." |
+
+`subject` is the one field the two registrations do not share, and its rule still lives in `RegistrationRules` beside the other three — because `PUT /api/me/subject` (§12.5) resets the same field later, and the screen that first states a subject and the screen that changes it must not disagree about what a subject is.
 
 The uniqueness check runs as a query **and** is backed by the unique index, so two simultaneous registrations cannot both win; the index violation is caught and returned as the same 400.
 
@@ -351,9 +358,11 @@ The uniqueness check runs as a query **and** is backed by the unique index, so t
 | :--------- | :---------------------- | :---------------------------------------------------------------- |
 | `email`    | required, valid address | "Enter a valid email address."                                    |
 | `password` | required                | "Enter your password."                                            |
-| both       | wrong pair → `401`      | **"Email or password is incorrect."** — never which half is wrong |
+| both       | wrong pair → `400`, named `credentials` | **"Email or password is incorrect."** — never which half is wrong |
 
 The single message is deliberate: saying "no account with that email" tells a stranger which addresses are registered.
+
+**And the key is deliberate too.** A key in the `errors` dictionary is a field name, and §4's error shape says the client puts each message under the box of that name — so naming this one `email` would have the server pointing at a field it has just refused to have an opinion about. `credentials` matches no control, which is what sends the message to the banner over the form, where an answer about a *pair* belongs. It also removes a trap: a message pinned to `email` outlived the correction of the *password*, leaving the form invalid so the next press of the button sent nothing at all.
 
 ### Resetting your own password (§12.4)
 
@@ -700,9 +709,9 @@ A broken database at 09:00 on demo day is then a thirty-second fix, not an impro
 
 ---
 
-## 12. Extensions — three features built after the requirements passed
+## 12. Extensions — the features built after the requirements passed
 
-Everything in §1–§11 was planned before a line was written. This section is the opposite: three features designed **after** the twenty-three requirements were green, each with a full plan file of its own. They share one rule, which is why they are grouped rather than appended separately:
+Everything in §1–§11 was planned before a line was written. This section is the opposite: features designed **after** the twenty-three requirements were green. They share one rule, which is why they are grouped rather than appended separately:
 
 > **Nothing here may weaken a guarantee already made.** Every one of them adds a read path, and every one of them goes through the same door the original feature used — `LessonQueries.VisibleTo` for lessons, `CurrentUser.UserId` for identity, a separate DTO for anything anonymous. A feature that needed a second door was redesigned until it did not.
 
@@ -712,6 +721,7 @@ Everything in §1–§11 was planned before a line was written. This section is 
 | 12.2 | Public directory + student profile | [`discover.md`](discover.md) | none            | an anonymous row carries aggregates, never a person          |
 | 12.3 | The AI helper                      | [`ai.md`](ai.md)             | none            | the model is shown only what the student's own screens show  |
 | 12.4 | Resetting your own password        | this section                 | none            | the account is taken from the cookie, never from the request |
+| 12.5 | Finding a teacher by subject       | this section                 | `Teachers.Subject` | the directory still answers in aggregates, and only about approved teachers |
 
 ### 12.1 Profile photos — bytes in the database, on purpose
 
@@ -739,7 +749,7 @@ Two halves of one idea: **there was nothing to look at before signing in, and a 
 - **Approved teachers only.** Pending and rejected are not a public record; a rejection certainly is not.
 - **Every number is an aggregate over the teacher's own course** — open lessons, published lessons, students, marks, passes. None can be traced to one student. The open-lesson count uses the same predicate as `LessonQueries.VisibleTo`, so it cannot drift from what a student sees inside the course. Pass _rate_ is deliberately not computed server-side: a course with no marks has no pass rate, and rendering "—" is the client's decision, not a number the server should invent.
 
-Ordered by **open lessons descending, then name**, so a newly approved teacher with nothing to show lands at the bottom and the first screen of the directory is never empty. `?q=` filters on name.
+Ordered by **open lessons descending, then name**, so a newly approved teacher with nothing to show lands at the bottom and the first screen of the directory is never empty. `?q=` filters on name — and, since §12.5, on subject as well.
 
 **The photo problem, and why a second photo route.** The directory is read with no session, and `GET /api/users/{id}/photo` is `[Authorize]` — it answers those readers 401. Opening that route to every id would make _holding an id_ a permission, and §3 chose UUIDv7 precisely so an id would carry no authority. So there is a second action, `GET /api/public/teachers/{id}/photo`, whose authorisation is a question asked **in SQL** — "is this an approved teacher?" — rather than a claim. A teacher who is not approved and a teacher with no photo answer **identically (404)**, so nothing there tells a caller whether a given id is a person at all. The two routes differ in exactly one header: `public, max-age=300` for a directory photo, `private` for anyone else's.
 
@@ -814,6 +824,23 @@ So this is the half that was built, and the naming is deliberate: **`PUT /api/me
 | New and confirm differ                       | —      | under **Confirm new password**, client-side, never sent |
 
 ---
+
+### 12.5 Finding a teacher by subject
+
+**The gap.** §12.2 shipped a directory anybody could read and a `?q=` that searched **names**. That answers "is Amina Farouk on this platform", which is the question of somebody who already has the answer. The question a visitor actually arrives with is *"who teaches biology"* — and the platform had nowhere to store the word "biology", let alone match on it. A teacher's subject was implicit in their lesson titles and nowhere else.
+
+**One column, and no second search box.** A teacher states a subject; `?q=` matches a name **or** a subject in the same parameter. Three decisions hold it:
+
+- **A declared field, not an inference over lesson titles.** Searching titles would have needed no migration, and it would have been wrong: it makes a teacher findable only once they have published, matches a passing mention of "algebra" in a chemistry course, and answers the visitor with a match they cannot see the reason for. A subject is a claim the teacher makes about themselves; a lesson title is not. `Teachers.Subject` is the first column added to a requirement's own table since `Avatars` — the cost is one nullable `TEXT`, and everything else about the directory is untouched.
+- **One box, two fields — not two parameters.** Somebody hunting for a teacher knows *either* the person *or* the subject, rarely both, and asking which of the two they just typed is a question the server can answer itself. Two boxes would make the visitor choose before they have a single result to choose from. So it stays one `q`, `OR`-ed across the two columns, and the match is a substring rather than a prefix — "algebra" should find "Mathematics and Algebra", and a directory this size does not need the index an anchored `LIKE` would buy.
+- **The privacy rules of §12.2 are unchanged, and the search cannot become the hole in them.** The subject filter is applied **after** `Status == Approved`, not beside it, so a pending teacher's subject is as unpublished as the rest of their row — searching for it must not be the one query that confirms they registered. Suite F asserts exactly that. The field rides on `PublicTeacherDto`, which is still a separate record from the admin screen's `TeacherSummaryDto`, so nothing about widening the search widens what an anonymous row carries.
+
+**Where it is written, and by whom.** Registration asks for it, because it is what an administrator reads before deciding and what the directory searches the moment that decision goes the teacher's way. It is changed afterwards at **`PUT /api/me/subject`**, and the placement of that route is the one real design decision here:
+
+- **Not** under `/api/teacher/*`. Everything there is fenced behind the `ApprovedTeacher` policy (§0.1), and a teacher who is still waiting has to be able to fix a typo in the very field the decision about them turns on. Putting one unfenced route inside that prefix would cost more than it saved: the fence's value is that it has no exceptions.
+- **Under `/api/me`**, beside `password` and `photo` — the routes that change *the account holding the cookie*. There is no id in the body to tamper with, which is the same property that makes §12.4 safe, and the role check is the plain `Teacher` role because nobody else has a subject to state.
+
+The value comes back on `MeResponse` rather than through a `GET` of its own, for the reason §3.1 gives for standing: it is a fact about who is asking, and a second endpoint for one string is a second thing to keep in step.
 
 ## Appendix C — The public directory is the first anonymous read path beyond `/api/public/home`
 

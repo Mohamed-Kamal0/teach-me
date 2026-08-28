@@ -143,8 +143,13 @@ _Added 2026-08-28. Everything above is the client's brief as given, unchanged. E
 | **The helper became an AI**             | [`ai.md`](ai.md)             | It answers from the asking student's own courses, lessons and marks — with the phrase list still underneath.   |
 | **Resetting your own password**         | [`plan.md` §12.4](plan.md)   | `PUT /api/me/password` — the current password is the proof of identity, so no mail has to leave the app.        |
 | **A date of birth on the profile**      | [`plan.md` §3, §5](plan.md)  | A fourth editable field on the student's own row, picked off a calendar and stored as a `DateOnly`.            |
+| **Finding a teacher by subject**        | [`plan.md` §12.5](plan.md)   | A teacher declares what they teach; `/teachers` is searched by name **or** subject, in one box, with no session. |
 
-The last of those is the smallest, and the only one that changes a requirement's own screen rather than adding a new one. Req 6 names *"the parts they may change"* without listing them, so a fourth editable field is inside the brief rather than beyond it — and the line that matters is untouched: what may **not** be changed is still absent from the form *and* from the request.
+**On the last of those.** The directory's search box already existed and searched names — which answers *"is Amina Farouk on this platform"*, the question of somebody who already has the answer. The question a visitor actually arrives with is *"who teaches biology"*, and the platform had nowhere to store the word "biology": a teacher's subject was implicit in their lesson titles and nowhere else. So teachers now declare one at registration (and may restate it from their own profile, **including while still awaiting a decision** — it is the field that decision turns on), the administrator sees it on the approvals table, and `?q=` matches it alongside the name.
+
+It adds one nullable column, `Teachers.Subject`, and **no new guarantee is asked for or given**. The subject filter is applied *inside* the approved set rather than beside it, so searching for a pending teacher's subject is not the one query that confirms they registered — a rule with a test of its own in suite F. Nothing else about what an anonymous row carries has moved.
+
+The date of birth is the smallest of the six, and the only one that changes a requirement's own screen rather than adding a new one. Req 6 names *"the parts they may change"* without listing them, so a fourth editable field is inside the brief rather than beyond it — and the line that matters is untouched: what may **not** be changed is still absent from the form *and* from the request.
 
 ### The one line of this brief that no longer holds
 
@@ -171,5 +176,5 @@ What email actually buys is the **forgotten**-password case — proving identity
 
 The brief's own demo script runs unchanged. Two moments were added to the end of it, and both are things a visitor can see before they have an account:
 
-- open `/teachers` **signed out** — the approved teachers are listed with their photos and their own course's numbers, and the raw response carries neither an email nor a joining code;
+- open `/teachers` **signed out** — the approved teachers are listed with their photos, the subject each teaches and their own course's numbers, and the raw response carries neither an email nor a joining code. Type a subject rather than a name into the search box: it finds every teacher who teaches it, and a teacher still awaiting approval is not among them;
 - ask the helper _"how did I do on the last quiz"_ as a signed-in student — it answers from that student's actual marks, and the "Take me there" button only appears for a screen that student is genuinely entitled to.

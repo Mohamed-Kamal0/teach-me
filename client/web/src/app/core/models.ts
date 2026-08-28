@@ -9,6 +9,9 @@ export interface MeResponse {
   teacherStatus: TeacherStatus | null;
   teacherDecidedAtUtc: string | null;
   photoETag: string | null;
+  /** What a teacher teaches. Null for everyone else, and for a teacher who registered before
+   *  the field existed — which is a real state, not a blank to render. */
+  subject: string | null;
 }
 
 export interface LoginResponse {
@@ -42,6 +45,7 @@ export interface HomeResponse {
 export interface TeacherSummary {
   userId: string;
   fullName: string;
+  subject: string | null;
   email: string;
   status: TeacherStatus;
   createdAtUtc: string;
@@ -55,6 +59,7 @@ export interface TeacherSummary {
 export interface PublicTeacher {
   userId: string;
   fullName: string;
+  subject: string | null;
   photoETag: string | null;
   memberSinceUtc: string;
   openLessonCount: number;

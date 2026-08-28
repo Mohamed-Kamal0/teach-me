@@ -155,6 +155,14 @@ control.valueChanges.pipe(take(1)).subscribe(() => clearServerError(control));
 Anything the server names that has no matching control is handed back to the caller and shown as a
 banner, so a message is never silently dropped.
 
+**A server message dies with the request it describes.** It is cleared on the next change to
+**any** control, not just the one it was pinned to — one subscription on the form rather than one
+per control — and every submit drops the remaining ones before it checks whether the form is valid.
+Both halves are needed, and the sign-in screen is where their absence showed: a refused pair used to
+land on `email`, so correcting the *password* cleared nothing, the form stayed invalid, and the
+button did nothing at all until the email was touched. An answer to the last attempt is not a reason
+to refuse to make the next one.
+
 **A rule with no sentence is worse than no rule.** `describe()` turns a control's error keys into
 wording, and a key it does not know returns `null` — which shows nothing while the form stays
 invalid, so submit refuses and never says why. That is why the datepicker's keys are in the switch
@@ -333,8 +341,8 @@ A password box you cannot read is how a typo becomes *"Email or password is inco
 ### 1.1 A teacher registers
 
 **Who:** anyone, signed out.
-**The screen:** `/register/teacher` — name, email, password, confirm password, each password box
-with the reveal toggle from §0.7. Submit stays disabled
+**The screen:** `/register/teacher` — name, email, **the subject they teach**, password, confirm
+password, each password box with the reveal toggle from §0.7. Submit stays disabled
 while invalid. On success the teacher lands on `/teacher/standing`, which says the account is
 waiting.
 
@@ -346,11 +354,18 @@ waiting.
 2. The email is **normalised to lowercase** and checked against `Users` — the one table that owns
    every identity, so "already in use by anybody" includes students and the administrator.
 3. A `User` row (role `Teacher`, UUIDv7 id, `PasswordHasher<User>` hash) and a `Teacher` row are
-   inserted together. The `Teacher` row gets `Status = Pending` and a **unique 8-character Crockford
-   base32 joining code**, retried up to ten times against the unique index.
+   inserted together. The `Teacher` row gets `Status = Pending`, the **trimmed subject**, and a
+   **unique 8-character Crockford base32 joining code**, retried up to ten times against the unique
+   index.
+
+**Why the subject is asked for here and not later.** It is the one field an administrator has to go
+on beyond a name (§2.1), and it is half of what the public directory is searched on the moment that
+decision goes the teacher's way (§6.2). Asking for it on the form that already exists costs one box;
+leaving it to the profile screen would mean every approval decision, and every new card in the
+directory, started out blank. It is changed afterwards from `/teacher/profile` (§3.9).
 
 **When it fails:** **400** with the message beside the field — an email already in use by *anybody*,
-a weak password, a mismatch. The password rules are also enforced in the browser so the common case
+a weak password, a mismatch, a blank subject (*"Enter the subject you teach."*). The password rules are also enforced in the browser so the common case
 never reaches the server; the server enforces them anyway.
 
 **Proved by:** `PendingTeacherTests` (what a pending teacher may then do), and the registration step
@@ -640,8 +655,12 @@ identity outside the guarantee. They own nothing else: no lessons, no students, 
 
 **Who:** `Admin` only.
 **The screen:** `/admin/approvals` — a table of teachers with a status filter, each row carrying a
-photo or an initials tile, the name, the email, when they registered, and **Approve** / **Refuse**.
-Nobody waiting says so in words, not as a blank panel.
+photo or an initials tile, the name, **the subject they say they teach**, the email, when they
+registered, and **Approve** / **Refuse**. Nobody waiting says so in words, not as a blank panel.
+
+The subject column is there so the decision is not made on a name alone — what somebody says they
+teach is most of what an administrator has to go on. A teacher whose row predates the field shows an
+em dash, never an empty cell.
 
 **The calls:**
 
@@ -947,13 +966,36 @@ approved guard, because neither setting your own photo nor resetting your own pa
 teaching. A teacher who has been turned away can still change their password; there would be
 something wrong with an app that refused them that.
 
-**The screen:** `/teacher/profile` — three cards: the photo card with upload and remove, the account
-card (name and email, both read-only here), and the password card.
+**The screen:** `/teacher/profile` — the identity band (photo, name, email; the last two read-only
+here), then **the subject card**, then the password card.
 **The calls:** `PUT /api/me/photo` (multipart) · `DELETE /api/me/photo`, fully described in §6.3 ·
-`PUT /api/me/password`, fully described in §1.6.
+`PUT /api/me/password`, fully described in §1.6 · **`PUT /api/me/subject`** → **204**.
 
-All three cards are shared components used unchanged by the student and administrator profiles, so
-the three screens differ only in the eyebrow above the heading and what sits beside them.
+The identity band and the password card are shared components used unchanged by the student and
+administrator profiles, so those screens differ only in the eyebrow above the heading and what sits
+between them.
+
+**The subject card is the one that is a teacher's alone**, and it sits above the password card
+because it is the thing a teacher comes back to this page to change, where a password reset is the
+thing they hope never to need.
+
+- **A pending teacher may use it.** Same reason the whole route has no approved guard: the subject
+  is what the decision about them turns on, so a typo in it has to be fixable *while* waiting.
+- **The route is `/api/me/subject`, not `/api/teacher/subject`.** Everything under `/api/teacher/*`
+  is fenced behind the approved policy and §3.1 says so without exception; one unfenced route inside
+  that prefix would cost more than it saved. Under `/api/me` it sits beside `password` and `photo`
+  — the routes that change **the account holding the cookie**, with no id in the body to tamper with.
+- **The value is read back from `GET /api/me`**, not from a fetch of its own. The subject rides on
+  identity for the same reason standing does (§3.1), so the client holds exactly one copy of it.
+- **The box follows `me` only while it is pristine.** A refresh that overwrote what somebody was
+  halfway through typing would be the card losing their work for them.
+
+**When it fails:** **400** *"Enter the subject you teach."* for a blank or whitespace-only one, or
+*"… in 60 characters or fewer."* over the bound — the same two sentences the registration form uses,
+from the same rule · **403** for anyone who is not a teacher · **400** without a valid `X-XSRF-TOKEN`.
+
+**Proved by:** `PublicDirectoryTests` — a teacher corrects their subject and the directory follows on
+the next read, a blank one is refused on the `subject` key, and a student calling it gets a 403.
 
 ---
 
@@ -1270,8 +1312,8 @@ SQLite file, `dotnet ef database update`, load `/` in a private window: that is 
 someone with no session — `/api/public/home` only ever returned two totals, so nothing it sent could
 be traced to a person. Rows are a different problem, and three rules hold it.
 
-**The screen:** `/teachers` — a card per approved teacher: their photo, their name, when they joined,
-and their own course's numbers.
+**The screen:** `/teachers` — a card per approved teacher: their photo, their name, **the subject
+they teach**, when they joined, and their own course's numbers. One search box over the lot.
 **The call:** `GET /api/public/teachers?page=&pageSize=&q=` → **200** paged
 
 **Rule 1 — a separate DTO, never a reused one.** `PublicTeacherDto` exists so that a field added later
@@ -1288,10 +1330,41 @@ same predicate as `VisibleTo`**, so it cannot drift from what a student sees ins
 rendering "—" is the client's decision, not a number the server should invent.
 
 **Ordering:** open lessons descending, then name. A newly approved teacher with nothing to show lands
-at the bottom, so **the first screen of the directory is never empty**. `?q=` filters on name.
+at the bottom, so **the first screen of the directory is never empty**.
 
-**Proved by:** `PublicDirectoryTests` — it answers with no session, lists approved teachers only, and
-**its raw body carries neither an email nor a join code**.
+**Rule 4 — `?q=` matches a name *or* a subject, in one box.** The question a visitor actually arrives
+with is *"who teaches biology"*, not *"is Amina Farouk on this platform"* — the second is the question
+of somebody who already has the answer. So the subject a teacher declared at registration (§1.1) is
+searched alongside their name, `OR`-ed inside the same parameter:
+
+```csharp
+// Features/Public/Services/PublicDirectoryService.cs — applied *after* the approved filter, never beside it.
+teachers = teachers.Where(t =>
+    EF.Functions.Like(t.User.FullName, $"%{term}%") ||
+    (t.Subject != null && EF.Functions.Like(t.Subject, $"%{term}%")));
+```
+
+- **One box, not two.** Somebody knows either the person or the subject, rarely both, and asking
+  which of the two they just typed is a question the server can answer itself. A second box would
+  make the visitor choose before they had a single result to choose from.
+- **A substring, not a prefix** — "algebra" should find "Mathematics and Algebra", and a directory
+  this size does not need the index an anchored `LIKE` would buy.
+- **The filter narrows the approved set; it never widens it.** `Status == Approved` is applied first
+  and the search runs inside it, so **searching a pending teacher's subject cannot be the one query
+  that confirms they registered**.
+- **A row with no subject matches nothing rather than matching on empty.** Null means *never asked*
+  — a teacher whose row predates the field — and the card omits the line rather than printing a
+  placeholder.
+
+The box appears as soon as there is **more than one teacher** to tell apart. It used to wait for a
+second page of cards, on the grounds that a search over six cards is furniture; that reasoning was
+about names, and "who teaches chemistry" is a real question over six cards where "which of these six
+is called Amina" was not. Typing is debounced 250ms; **clear is not**, because pressing clear is not
+typing and the box is already empty by the time the request would have fired.
+
+**Proved by:** `PublicDirectoryTests` — it answers with no session, lists approved teachers only,
+**its raw body carries neither an email nor a join code**, a subject search finds every teacher who
+teaches it and nobody else, and **a pending teacher's subject matches nothing at all**.
 
 ### 6.3 Profile photos
 
@@ -1475,13 +1548,14 @@ answers **401** signed out. Every non-`GET` additionally answers **400** without
 | `POST /api/auth/register/student`                   | anyone             | 201                                            | 400 email in use (**any** role), 400 validation             | 1.2  |
 | `POST /api/auth/login`                              | anyone             | 200 `{role, teacherStatus?}` + `Set-Cookie`    | 400 *"Email or password is incorrect"* — never which half   | 1.3  |
 | `POST /api/auth/logout`                             | any signed-in      | 204 + cookie cleared                           | —                                                           | 1.5  |
-| `GET /api/me`                                       | any signed-in      | 200 identity + standing + `photoETag`          | —                                                           | 1.4  |
+| `GET /api/me`                                       | any signed-in      | 200 identity + standing + `photoETag` + `subject` | —                                                        | 1.4  |
 | `PUT /api/me/password`                              | any signed-in      | 204 — nothing echoed, session undisturbed      | 400 wrong current · 400 policy · 400 reuse — each named on its field | 1.6 |
+| `PUT /api/me/subject`                               | Teacher, **any standing** | 204                                     | 400 blank / over 60 chars, **403 not a teacher**            | 3.9  |
 | `PUT /api/me/photo`                                 | any signed-in      | 200 `{photoETag, updatedAtUtc}`                | 400 not an image, **413** over 5 MB                         | 6.3  |
 | `DELETE /api/me/photo`                              | any signed-in      | 204 (idempotent)                               | —                                                           | 6.3  |
 | `GET /api/users/{userId}/photo`                     | any signed-in      | 200 webp, `private, max-age=300` · 304         | 404 no photo                                                | 6.3  |
 | `GET /api/public/home`                              | anyone, no cookie  | 200 `{counts, howToJoin}`                      | — reads `0` on an empty database                            | 6.1  |
-| `GET /api/public/teachers`                          | anyone, no cookie  | 200 paged, approved only                       | — legitimately empty                                        | 6.2  |
+| `GET /api/public/teachers`                          | anyone, no cookie  | 200 paged, approved only; `?q=` **name or subject** | — legitimately empty                                   | 6.2  |
 | `GET /api/public/teachers/{userId}/photo`           | anyone, no cookie  | 200 webp, `public, max-age=300` · 304          | **404** for "no photo" **and** "not approved", identically  | 6.3  |
 | `GET /api/health`                                   | anyone, no cookie  | 200 `{status, db}`                             | 503 database unreachable                                    | 6.4  |
 | `GET /api/admin/teachers?status=`                   | Admin              | 200 paged, name asc                            | 403                                                         | 2.1  |
@@ -1531,7 +1605,7 @@ answers **401** signed out. Every non-`GET` additionally answers **400** without
 
 ### Every test suite
 
-`cd server && dotnet test` — **sixty tests**, over `Microsoft.Data.Sqlite` in shared-cache
+`cd server && dotnet test` — **seventy-one tests**, over `Microsoft.Data.Sqlite` in shared-cache
 in-memory mode, **never** EF Core's InMemory provider (which ignores unique indexes, so half of these
 would pass whether or not the constraints they test exist).
 
@@ -1542,7 +1616,7 @@ would pass whether or not the constraints they test exist).
 | **C** | `TimingEnforcementTests`                          | **no `quizUrl` key in the raw JSON** | 4.4 |
 | **D** | `OwnershipIsolationTests`                         | another teacher's lesson (404), an unjoined course (403), the student profile's three rules | 3.6 · 4.4 |
 | **E** | `AvatarImageProcessorTests` · `AvatarEndpointTests` | re-encoding, the 413, the 304, the tile | 6.3 |
-| **F** | `PublicDirectoryTests`                            | approved only, no email or join code in the raw body, the conditional photo | 6.2 · 6.3 |
+| **F** | `PublicDirectoryTests`                            | approved only, no email or join code in the raw body, the conditional photo, **search over name and subject — and never over an unapproved row** | 6.2 · 6.3 · 3.9 |
 | **G** | `AiHelperTests`                                   | the context pack's contents, and **every** degradation path answering 200 | 5.2 |
 | **H** | `PasswordResetTests`                              | the old password stops working and the new one starts, a wrong current password changes nothing, the CSRF refusal, one person's reset leaves everyone else alone | 1.6 |
 | —     | `AiHelperLiveTests`                               | one real call, skipped unless `HELPER_LIVE=1` | 5.2 |

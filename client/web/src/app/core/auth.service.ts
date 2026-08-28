@@ -40,8 +40,8 @@ export class AuthService {
     return response;
   }
 
-  async registerTeacher(fullName: string, email: string, password: string): Promise<void> {
-    await firstValueFrom(this.http.post('/api/auth/register/teacher', { fullName, email, password }));
+  async registerTeacher(fullName: string, email: string, password: string, subject: string): Promise<void> {
+    await firstValueFrom(this.http.post('/api/auth/register/teacher', { fullName, email, password, subject }));
   }
 
   async registerStudent(fullName: string, email: string, password: string): Promise<void> {
@@ -58,6 +58,16 @@ export class AuthService {
    */
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
     await firstValueFrom(this.http.put('/api/me/password', { currentPassword, newPassword }));
+  }
+
+  /**
+   * Restates what the signed-in teacher teaches. `me` is refreshed afterwards because the subject
+   * rides on identity — the profile card reads it back from there rather than keeping a second
+   * copy that could disagree with the server.
+   */
+  async updateSubject(subject: string): Promise<void> {
+    await firstValueFrom(this.http.put('/api/me/subject', { subject }));
+    await this.refreshMe();
   }
 
   /** Drops the session this tab knows about. Called on sign-out, and by the error interceptor

@@ -3,7 +3,8 @@
 An ASP.NET Core 10 + Angular 18 teaching platform. Teachers publish lessons — a recording, and
 optionally a handout, a quiz and its answers — each released on its own schedule. Students join a
 teacher's course with a joining code and see only what is open to them, now. A public directory
-at `/teachers` lists every approved teacher and their own course's numbers, signed in or not.
+at `/teachers` lists every approved teacher, the subject they teach and their own course's numbers,
+searchable by name or subject, signed in or not.
 Anyone signed in can set a profile photo and reset their own password, and a student can ask an
 in-app helper — backed by a model that is shown only that student's own data — where to find things.
 
@@ -185,7 +186,7 @@ cd server
 dotnet test
 ```
 
-Fifty-two tests across the suites that a click-through cannot give you confidence in:
+Seventy-one tests across the suites that a click-through cannot give you confidence in:
 
 | Suite                             | What it defends                                                                                                                                           |
 | :-------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -194,7 +195,7 @@ Fifty-two tests across the suites that a click-through cannot give you confidenc
 | **C** — `TimingEnforcementTests`  | An unopened quiz has **no `quizUrl` key in the raw JSON** — asserted on the response string, because a missing key and a null key deserialise identically |
 | **D** — `OwnershipIsolationTests` | A teacher cannot reach another teacher's lesson (404); a student cannot read a course they never joined (**403**, not an empty list); a student profile shows the calling teacher's marks and lesson count only |
 | **E** — `AvatarImageProcessorTests` · `AvatarEndpointTests` | Whatever is uploaded comes back out as a **256×256 WebP produced by our own encoder** — a non-image is a 400 rather than an exception, an implausible declared dimension is refused before the decode, an upload over 5 MB is a **413**, a repeat fetch with `If-None-Match` is a **304**, and deleting a photo returns the initials tile |
-| **F** — `PublicDirectoryTests`    | The anonymous directory answers without a session, lists **approved teachers only**, and its raw body carries neither an email nor a join code; a teacher photo is public only while that teacher is approved |
+| **F** — `PublicDirectoryTests`    | The anonymous directory answers without a session, lists **approved teachers only**, and its raw body carries neither an email nor a join code; a teacher photo is public only while that teacher is approved; `?q=` finds a teacher by **name or subject**, and **a pending teacher's subject matches nothing** |
 | **G** — `AiHelperTests`           | The AI helper's context pack **excludes an unopened lesson and carries no URL at all** — asserted on the serialised pack, in suite C's style; one student's pack never mentions another; and every failure path (no key, a model that throws, times out, returns unparseable JSON, invents a route, or is rate-limited) answers **200 with the phrase-list answer**, never a 5xx |
 
 The tests run against **`Microsoft.Data.Sqlite`** in shared-cache in-memory mode, never EF Core's

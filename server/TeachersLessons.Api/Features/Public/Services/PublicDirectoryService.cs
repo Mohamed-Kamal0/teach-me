@@ -23,6 +23,10 @@ public class PublicDirectoryService(AppDbContext db, TimeProvider clock) : IPubl
     /// The public directory. Approved teachers only — pending and rejected are not a public
     /// record. Pass rate is not computed here: a course with no marks has no pass rate, and "—"
     /// is a rendering decision, not a number the server should invent.
+    ///
+    /// <paramref name="q"/> matches a name or a subject. It stays a substring match rather than a
+    /// prefix one because "algebra" should find "Mathematics and Algebra", and the directory is
+    /// small enough that the scan an unanchored LIKE forces is not a cost worth designing around.
     /// </summary>
     public async Task<PagedResult<PublicTeacherDto>> GetTeachersAsync(int? page, int? pageSize, string? q, CancellationToken ct)
     {
@@ -31,10 +35,16 @@ public class PublicDirectoryService(AppDbContext db, TimeProvider clock) : IPubl
 
         var teachers = db.Teachers.Where(t => t.Status == TeacherStatus.Approved);
 
+        // One box, two fields: somebody looking for a teacher knows either the person or the
+        // subject, rarely both, and asking them which of the two they typed is a question the
+        // server can answer itself. OR rather than two parameters for the same reason — a
+        // second box would make the visitor choose before they have any results to choose from.
         if (!string.IsNullOrWhiteSpace(q))
         {
             var term = q.Trim();
-            teachers = teachers.Where(t => EF.Functions.Like(t.User.FullName, $"%{term}%"));
+            teachers = teachers.Where(t =>
+                EF.Functions.Like(t.User.FullName, $"%{term}%") ||
+                (t.Subject != null && EF.Functions.Like(t.Subject, $"%{term}%")));
         }
 
         var total = await teachers.CountAsync(ct);
@@ -48,6 +58,7 @@ public class PublicDirectoryService(AppDbContext db, TimeProvider clock) : IPubl
             .Select(t => new PublicTeacherDto(
                 t.UserId,
                 t.User.FullName,
+                t.Subject,
                 db.Avatars.Where(a => a.UserId == t.UserId).Select(a => a.ETag).FirstOrDefault(),
                 t.User.CreatedAtUtc,
                 // The same predicate LessonQueries.VisibleTo uses, so this count and the one a

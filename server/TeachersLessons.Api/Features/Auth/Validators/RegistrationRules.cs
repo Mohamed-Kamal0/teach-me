@@ -3,9 +3,11 @@ using FluentValidation;
 namespace TeachersLessons.Api.Features.Auth.Validators;
 
 /// <summary>
-/// Teacher and student registration ask for exactly the same three fields under exactly the
-/// same rules — the wording of every message is part of the contract, so it lives once here
-/// rather than being copied into each validator.
+/// Teacher and student registration ask for the same three fields under exactly the same rules
+/// — the wording of every message is part of the contract, so it lives once here rather than
+/// being copied into each validator. A teacher is asked for one more, the subject they teach,
+/// and its rule lives here too because the profile screen resets the same field later and the
+/// two must not drift.
 /// </summary>
 internal static class RegistrationRules
 {
@@ -21,6 +23,15 @@ internal static class RegistrationRules
             .MaximumLength(256).WithMessage("Enter a valid email address.")
             .MustAsync((email, ct) => BeUnique(db, email, ct))
             .WithMessage("That email is already registered. Sign in instead?");
+
+    /// <summary>
+    /// What a teacher teaches. Kept short on purpose: this is a subject, not a syllabus, and a
+    /// directory search over free paragraphs would match on the wrong half of the sentence.
+    /// </summary>
+    public static IRuleBuilderOptions<T, string> Subject<T>(this IRuleBuilderInitial<T, string> rule) =>
+        rule.Cascade(CascadeMode.Stop)
+            .Must(v => !string.IsNullOrWhiteSpace(v)).WithMessage("Enter the subject you teach.")
+            .Length(2, 60).WithMessage("Enter the subject you teach, in 60 characters or fewer.");
 
     public static IRuleBuilderOptions<T, string> Password<T>(this IRuleBuilderInitial<T, string> rule) =>
         rule.Cascade(CascadeMode.Stop)

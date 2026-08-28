@@ -134,6 +134,89 @@ public class PublicDirectoryTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Search_matches_a_name_or_a_subject()
+    {
+        var admin = await TestAuth.SignedInAdminAsync(_factory);
+
+        await TestAuth.RegisterAndSignInTeacherAsync(_factory, "dir.byName.f8@test.local", "Hypatia Alexandria", subject: "Astronomy");
+        await ApproveAsync(admin, "dir.byName.f8@test.local");
+
+        await TestAuth.RegisterAndSignInTeacherAsync(_factory, "dir.bySubject.f8@test.local", "Rosalind Franklin", subject: "Molecular Astronomy");
+        await ApproveAsync(admin, "dir.bySubject.f8@test.local");
+
+        await TestAuth.RegisterAndSignInTeacherAsync(_factory, "dir.neither.f8@test.local", "Ada Lovelace", subject: "Computing");
+        await ApproveAsync(admin, "dir.neither.f8@test.local");
+
+        var anon = _factory.CreateClient();
+
+        // A name the subject does not contain.
+        var byName = await SearchAsync(anon, "Hypatia");
+        Assert.Equal(["Hypatia Alexandria"], byName);
+
+        // A subject neither name contains — and it must find *both* teachers who teach it,
+        // which is the whole point of the second field.
+        var bySubject = await SearchAsync(anon, "Astronomy");
+        Assert.Contains("Hypatia Alexandria", bySubject);
+        Assert.Contains("Rosalind Franklin", bySubject);
+        Assert.DoesNotContain("Ada Lovelace", bySubject);
+
+        // A substring inside the subject, not a prefix of it.
+        Assert.Contains("Rosalind Franklin", await SearchAsync(anon, "Molecul"));
+
+        Assert.Empty(await SearchAsync(anon, "Underwater Basket Weaving"));
+    }
+
+    [Fact]
+    public async Task Search_never_reaches_a_teacher_who_is_not_approved()
+    {
+        // A pending teacher's subject is as unpublished as the rest of their row: searching for
+        // it must not be the one query that confirms they registered.
+        await TestAuth.RegisterAndSignInTeacherAsync(_factory, "dir.hidden.f9@test.local", "Waiting Wanda", subject: "Palaeography");
+
+        var anon = _factory.CreateClient();
+
+        Assert.Empty(await SearchAsync(anon, "Palaeography"));
+    }
+
+    [Fact]
+    public async Task A_teacher_restates_their_subject_and_the_directory_follows()
+    {
+        var admin = await TestAuth.SignedInAdminAsync(_factory);
+        var teacher = await TestAuth.RegisterAndSignInTeacherAsync(_factory, "dir.restate.f10@test.local", "Second Thoughts", subject: "Geograhpy");
+        var teacherId = await ApproveAsync(admin, "dir.restate.f10@test.local");
+
+        var fix = await teacher.PutAsJsonAsync("/api/me/subject", new { subject = "Geography" });
+        Assert.Equal(HttpStatusCode.NoContent, fix.StatusCode);
+
+        var anon = _factory.CreateClient();
+        Assert.Equal("Geography", (await FindAsync(anon, teacherId)).Subject);
+        Assert.Empty(await SearchAsync(anon, "Geograhpy"));
+        Assert.Contains("Second Thoughts", await SearchAsync(anon, "Geography"));
+    }
+
+    [Fact]
+    public async Task A_blank_subject_is_refused_with_a_message_on_the_field()
+    {
+        var teacher = await TestAuth.RegisterAndSignInTeacherAsync(_factory, "dir.blank.f11@test.local", "Blank Slate");
+
+        var response = await teacher.PutAsJsonAsync("/api/me/subject", new { subject = "   " });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemRow>(JsonDefaults.Options);
+        Assert.Equal("Enter the subject you teach.", problem!.Errors["subject"].Single());
+    }
+
+    [Fact]
+    public async Task Only_a_teacher_has_a_subject_to_state()
+    {
+        var student = await TestAuth.RegisterAndSignInStudentAsync(_factory, "dir.notTeacher.f12@test.local");
+
+        var response = await student.PutAsJsonAsync("/api/me/subject", new { subject = "Mathematics" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Page_size_is_capped_at_one_hundred()
     {
         var anon = _factory.CreateClient();
@@ -217,6 +300,13 @@ public class PublicDirectoryTests : IClassFixture<ApiFactory>
         return (await response.Content.ReadFromJsonAsync<LessonRow>(JsonDefaults.Options))!.Id;
     }
 
+    private static async Task<List<string>> SearchAsync(HttpClient anon, string term)
+    {
+        var page = await anon.GetFromJsonAsync<PagedTeachers>(
+            $"/api/public/teachers?pageSize=100&q={Uri.EscapeDataString(term)}", JsonDefaults.Options);
+        return page!.Items.Select(t => t.FullName).ToList();
+    }
+
     private static async Task<PublicTeacherRow> FindAsync(HttpClient anon, Guid teacherId)
     {
         var page = await anon.GetFromJsonAsync<PagedTeachers>("/api/public/teachers?pageSize=100", JsonDefaults.Options);
@@ -239,8 +329,9 @@ public class PublicDirectoryTests : IClassFixture<ApiFactory>
 
     private record PagedTeachers(List<PublicTeacherRow> Items, int Page, int PageSize, int Total);
     private record PublicTeacherRow(
-        Guid UserId, string FullName, string? PhotoETag, DateTimeOffset MemberSinceUtc,
+        Guid UserId, string FullName, string? Subject, string? PhotoETag, DateTimeOffset MemberSinceUtc,
         int OpenLessonCount, int PublishedLessonCount, int StudentCount, int MarkCount, int PassedMarkCount);
+    private record ProblemRow(Dictionary<string, List<string>> Errors);
     private record PagedTeacherRows(List<TeacherRow> Items);
     private record TeacherRow(Guid UserId, string Email);
     private record JoinCodeEnvelope(string JoinCode);

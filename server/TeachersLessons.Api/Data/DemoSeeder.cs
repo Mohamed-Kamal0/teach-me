@@ -54,6 +54,7 @@ public static class DemoSeeder
         {
             UserId = approvedTeacherUser.Id,
             JoinCode = JoinCodeGenerator.Generate(),
+            Subject = "Mathematics",
             Status = TeacherStatus.Approved,
             DecidedAtUtc = now.AddDays(-2),
             DecidedByUserId = admin.Id
@@ -62,12 +63,14 @@ public static class DemoSeeder
         {
             UserId = pendingTeacherUser.Id,
             JoinCode = JoinCodeGenerator.Generate(),
+            Subject = "Chemistry",
             Status = TeacherStatus.Pending
         };
         var rejectedTeacher = new Teacher
         {
             UserId = rejectedTeacherUser.Id,
             JoinCode = JoinCodeGenerator.Generate(),
+            Subject = "History",
             Status = TeacherStatus.Rejected,
             DecidedAtUtc = now.AddDays(-1),
             DecidedByUserId = admin.Id
@@ -76,6 +79,7 @@ public static class DemoSeeder
         {
             UserId = secondApprovedTeacherUser.Id,
             JoinCode = JoinCodeGenerator.Generate(),
+            Subject = "Biology",
             Status = TeacherStatus.Approved,
             DecidedAtUtc = now.AddDays(-3),
             DecidedByUserId = admin.Id

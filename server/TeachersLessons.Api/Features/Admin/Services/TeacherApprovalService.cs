@@ -25,7 +25,9 @@ public class TeacherApprovalService(AppDbContext db, ICurrentUser currentUser, T
             .Skip((p - 1) * ps)
             .Take(ps)
             .Select(t => new TeacherSummaryDto(
-                t.UserId, t.User.FullName, t.User.Email, t.Status.ToString(), t.User.CreatedAtUtc, t.DecidedAtUtc,
+                // The subject is here so the decision is not made on a name alone: what somebody
+                // says they teach is most of what an administrator has to go on.
+                t.UserId, t.User.FullName, t.Subject, t.User.Email, t.Status.ToString(), t.User.CreatedAtUtc, t.DecidedAtUtc,
                 db.Avatars.Where(a => a.UserId == t.UserId).Select(a => a.ETag).FirstOrDefault()))
             .ToListAsync(ct);
 

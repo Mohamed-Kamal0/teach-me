@@ -8,7 +8,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { BusyRingComponent } from '../../shared/busy-ring.component';
 import { AuthService } from '../../core/auth.service';
-import { applyServerErrors, fieldMessage, revealErrors } from '../../core/form-errors';
+import { applyServerErrors, clearServerErrors, fieldMessage, revealErrors } from '../../core/form-errors';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
 
 @Component({
@@ -113,6 +113,10 @@ export class LoginComponent implements OnInit {
   }
 
   async submit(): Promise<void> {
+    // What the server said last time is not a reason to refuse to ask it again — otherwise the
+    // second press of a button that appears to work does nothing at all.
+    clearServerErrors(this.form);
+
     // Rather than a disabled button that explains nothing, the unmet rules are made to speak.
     if (this.form.invalid) {
       revealErrors(this.form);
@@ -130,9 +134,12 @@ export class LoginComponent implements OnInit {
       else await this.router.navigate(['/student/profile']);
     } catch (err) {
       const problem = problemFrom(err);
-      // 401 here means the credentials were wrong, not that a session lapsed. It is the pair
-      // that failed, so it is reported over the form — pinning it under Email would accuse the
-      // one of the two fields we have no reason to think is the wrong one.
+      // A refused pair is reported over the form, never under one box: the server declines to
+      // say which half was wrong, and pinning its message to Email would accuse the one of the
+      // two fields we have no reason to think is the wrong one. It arrives named `credentials`,
+      // which matches no control, so `applyServerErrors` hands it back for exactly that. A 401
+      // is read the same way — the interceptor lets this endpoint's 401 through untouched,
+      // because signing in with the wrong password is not a session that lapsed.
       if (problem.status === 401) {
         const said = problem.title ?? Object.values(problem.errors ?? {})[0]?.[0];
         this.banner.set(said ?? 'That email and password do not match an account.');

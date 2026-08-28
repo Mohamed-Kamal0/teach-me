@@ -9,5 +9,6 @@ public class RegisterTeacherRequestValidator : AbstractValidator<RegisterTeacher
         RuleFor(x => x.FullName).FullName();
         RuleFor(x => x.Email).UniqueEmail(db);
         RuleFor(x => x.Password).Password();
+        RuleFor(x => x.Subject).Subject();
     }
 }

@@ -46,6 +46,14 @@ import { NotifyService } from '../../core/notify.service';
               <span>{{ row.fullName }}</span>
             </td>
           </ng-container>
+          <!-- What they say they teach. Most of what an administrator has to decide on is here,
+               so it sits beside the name rather than being something to go and look up. -->
+          <ng-container matColumnDef="subject">
+            <th mat-header-cell *matHeaderCellDef>Subject</th>
+            <td mat-cell *matCellDef="let row" data-label="Subject">
+              @if (row.subject) { {{ row.subject }} } @else { <span class="text-muted">—</span> }
+            </td>
+          </ng-container>
           <ng-container matColumnDef="email">
             <th mat-header-cell *matHeaderCellDef>Email</th>
             <td mat-cell *matCellDef="let row" data-label="Email" class="cell-email">{{ row.email }}</td>
@@ -85,7 +93,7 @@ import { NotifyService } from '../../core/notify.service';
   `]
 })
 export class ApprovalsComponent implements OnInit {
-  columns = ['fullName', 'email', 'createdAtUtc', 'actions'];
+  columns = ['fullName', 'subject', 'email', 'createdAtUtc', 'actions'];
   status = signal<TeacherStatus>('Pending');
   loading = signal(true);
   error = signal<ProblemDetails | null>(null);

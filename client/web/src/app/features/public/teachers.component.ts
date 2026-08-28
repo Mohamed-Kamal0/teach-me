@@ -5,8 +5,6 @@ import { Subject, debounceTime } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
 import { StatePanelComponent } from '../../shared/state-panel.component';
 import { TeacherCardComponent } from './teacher-card.component';
 import { AuthService } from '../../core/auth.service';
@@ -23,8 +21,7 @@ const PAGE_SIZE = 24;
   selector: 'app-teachers',
   standalone: true,
   imports: [
-    FormsModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule,
-    StatePanelComponent, TeacherCardComponent
+    FormsModule, MatButtonModule, MatIconModule, StatePanelComponent, TeacherCardComponent
   ],
   template: `
     <div class="page-head">
@@ -35,13 +32,34 @@ const PAGE_SIZE = 24;
       </div>
     </div>
 
-    <!-- A search box over six cards is furniture; it appears once there is more than one page. -->
+    <!-- The box searches names *and* subjects, which is why it now appears as soon as there is
+         more than one teacher to choose between: "who teaches chemistry" is a real question over
+         six cards, where "which of these six is called Amina" was not. -->
     @if (searchable()) {
-      <mat-form-field appearance="outline" class="search" subscriptSizing="dynamic">
-        <mat-label>Search by name</mat-label>
-        <mat-icon matPrefix>search</mat-icon>
-        <input matInput [ngModel]="query()" (ngModelChange)="onQuery($event)" autocomplete="off" />
-      </mat-form-field>
+      <!-- A plain input rather than <mat-form-field>: an outlined field is drawn from three
+           separate outline segments, and every rounded-pill variant of it here was a stack of
+           ::ng-deep overrides that Material could move out from under at any release. The
+           element below owes nothing to MDC, so the pill is simply a pill. No <label>: the
+           magnifier and the placeholder say what the box is, and the aria-label says it to a
+           screen reader. -->
+      <div class="search">
+        <mat-icon class="search__icon" aria-hidden="true">search</mat-icon>
+        <input class="search__input" [ngModel]="draft()" (ngModelChange)="onQuery($event)"
+          autocomplete="off" type="search" placeholder="Search by name or subject…"
+          aria-label="Search teachers by name or subject" (keyup.enter)="searchNow()" />
+        @if (draft()) {
+          <button type="button" class="search__clear" aria-label="Clear the search"
+            (click)="clear()">
+            <mat-icon>close</mat-icon>
+          </button>
+        }
+        <!-- Typing already searches, so this button is not the only way in — it is the way that
+             skips the 250ms wait. An arrow rather than a second magnifier: the icon at the front
+             of the box already said "search", and this one means "now". -->
+        <button type="button" class="search__go" aria-label="Search now" (click)="searchNow()">
+          <mat-icon>arrow_forward</mat-icon>
+        </button>
+      </div>
     }
 
     <app-state-panel [loading]="loading()" [error]="error()" [empty]="(rows()?.length ?? 0) === 0"
@@ -66,7 +84,87 @@ const PAGE_SIZE = 24;
     </app-state-panel>
   `,
   styles: [`
-    .search { display: block; max-width: 22rem; margin-bottom: 1.25rem; }
+    /* One control: a pill holding the magnifier, the text, and the two buttons. Everything sits
+       *inside* the border, so nothing overhangs an edge that a narrow screen can cut off, and
+       the box lines up with the card grid below it. */
+    .search {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      width: 100%;
+      max-width: 26rem;
+      margin: 0 0 1.25rem;
+      padding: 0.3rem 0.35rem 0.3rem 0.85rem;
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      box-shadow: var(--shadow-1);
+      transition: border-color 140ms ease, box-shadow 140ms ease;
+    }
+    .search:hover { border-color: var(--primary); }
+
+    /* The ring is drawn on the box rather than on the input, because the input's own outline
+       would be drawn inside the pill. This is the field's focus indicator: hence the input
+       suppressing its own below. */
+    .search:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-wash);
+    }
+
+    .search__icon {
+      flex: none;
+      color: var(--muted);
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .search__input {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 2.25rem;
+      border: 0;
+      background: none;
+      color: inherit;
+      font: inherit;
+      font-size: var(--step-0);
+    }
+    .search__input:focus { outline: none; }
+    .search__input::placeholder { color: var(--muted); }
+    /* Chrome draws its own clear affordance on type="search"; ours is the one that resets the
+       page as well as the box. */
+    .search__input::-webkit-search-cancel-button { display: none; }
+
+    .search__clear,
+    .search__go {
+      display: grid;
+      place-items: center;
+      flex: none;
+      padding: 0;
+      border: 0;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 140ms ease, color 140ms ease, transform 140ms ease;
+    }
+    .search__clear mat-icon,
+    .search__go mat-icon { font-size: 20px; width: 20px; height: 20px; }
+
+    .search__clear {
+      width: 2rem;
+      height: 2rem;
+      background: none;
+      color: var(--muted);
+    }
+    .search__clear:hover { background: var(--paper-sunk); color: var(--ink); }
+
+    .search__go {
+      width: 2.25rem;
+      height: 2.25rem;
+      background: var(--primary);
+      color: #fff;
+    }
+    .search__go:hover { background: var(--ink); }
+    .search__go:active { transform: scale(0.94); }
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
@@ -90,7 +188,11 @@ export class TeachersComponent implements OnInit {
   rows = signal<PublicTeacher[] | null>(null);
   total = signal(0);
   page = signal(1);
+  /** The term the rows on screen were fetched with. */
   query = signal('');
+  /** What is in the box right now. It leads `query` by up to the debounce, which is exactly the
+   *  gap the button and the Enter key exist to close — both read this, never `query`. */
+  draft = signal('');
 
   /** The teacher ids a signed-in student is already on. Empty for everyone else. */
   enrolledIds = signal<Set<string>>(new Set());
@@ -101,6 +203,9 @@ export class TeachersComponent implements OnInit {
 
   constructor() {
     this.typed.pipe(debounceTime(250), takeUntilDestroyed()).subscribe(value => {
+      // A term the button or the Enter key already sent: re-fetching it would answer the same
+      // rows twice for one intention.
+      if (value === this.query()) return;
       this.query.set(value);
       this.page.set(1);
       this.load();
@@ -112,9 +217,10 @@ export class TeachersComponent implements OnInit {
     this.loadEnrolments();
   }
 
-  /** True once the directory is bigger than one page — before that, searching is pointless. */
+  /** True once there is more than one teacher to tell apart — and always while there is
+   *  anything in the box, so a search that matches nothing cannot take the box away with it. */
   searchable(): boolean {
-    return this.total() > PAGE_SIZE || this.query().length > 0;
+    return this.total() > 1 || this.draft().length > 0;
   }
 
   pageCount(): number {
@@ -123,12 +229,35 @@ export class TeachersComponent implements OnInit {
 
   emptyMessage(): string {
     return this.query()
-      ? `No teacher matches "${this.query()}".`
+      ? `No teacher's name or subject matches "${this.query()}".`
       : 'No teachers have been approved yet.';
   }
 
   onQuery(value: string): void {
+    this.draft.set(value);
     this.typed.next(value);
+  }
+
+  /** Pressing the button, or Enter, is somebody saying they have finished typing — so it goes
+   *  now rather than 250ms from now. The debounced stream is left alone; the worst it can do is
+   *  fire once more with the same term, which the server answers identically. */
+  searchNow(): void {
+    if (this.draft() === this.query()) return;
+    this.query.set(this.draft());
+    this.page.set(1);
+    this.load();
+  }
+
+  /** The debounce exists to hold off on a request while somebody is still typing. Pressing clear
+   *  is not typing, so it takes effect at once rather than 250ms after the box is already empty. */
+  clear(): void {
+    if (!this.draft()) return;
+    this.draft.set('');
+    this.typed.next('');
+    if (this.query() === '') return;
+    this.query.set('');
+    this.page.set(1);
+    this.load();
   }
 
   goTo(page: number): void {

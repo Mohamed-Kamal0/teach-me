@@ -1,6 +1,6 @@
 namespace TeachersLessons.Api.Features.Auth;
 
-public record RegisterTeacherRequest(string FullName, string Email, string Password);
+public record RegisterTeacherRequest(string FullName, string Email, string Password, string Subject);
 public record RegisterStudentRequest(string FullName, string Email, string Password);
 public record LoginRequest(string Email, string Password);
 
@@ -12,8 +12,17 @@ public record LoginRequest(string Email, string Password);
 /// </summary>
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
+/// <summary>
+/// A teacher restating what they teach. It is a `PUT` under `/api/me` rather than anything under
+/// `/api/teacher/*` for two reasons: the account being changed is the one holding the cookie, so
+/// there is no id in the body to tamper with; and everything under `/api/teacher/*` is fenced
+/// behind the approved policy, while a teacher who is still waiting must be able to correct a
+/// typo in the one field an administrator reads before deciding on them.
+/// </summary>
+public record UpdateSubjectRequest(string Subject);
+
 public record LoginResponse(string Role, string? TeacherStatus);
 
-public record MeResponse(Guid UserId, string Email, string FullName, string Role, string? TeacherStatus, DateTimeOffset? TeacherDecidedAtUtc, string? PhotoETag);
+public record MeResponse(Guid UserId, string Email, string FullName, string Role, string? TeacherStatus, DateTimeOffset? TeacherDecidedAtUtc, string? PhotoETag, string? Subject);
 
 public record PhotoUpdatedResponse(string ETag, DateTimeOffset UpdatedAtUtc);

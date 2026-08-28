@@ -1,11 +1,12 @@
 import { Component } from '@angular/core';
 import { IdentityCardComponent } from '../../shared/identity-card.component';
 import { PasswordCardComponent } from '../../shared/password-card.component';
+import { SubjectCardComponent } from './subject-card.component';
 
 @Component({
   selector: 'app-teacher-profile',
   standalone: true,
-  imports: [IdentityCardComponent, PasswordCardComponent],
+  imports: [IdentityCardComponent, SubjectCardComponent, PasswordCardComponent],
   template: `
     <div class="page-head">
       <div class="page-head__text">
@@ -16,6 +17,9 @@ import { PasswordCardComponent } from '../../shared/password-card.component';
 
     <div class="stack">
       <app-identity-card></app-identity-card>
+      <!-- Above the password card: the subject is the thing on this page a teacher comes back to
+           change, and a password reset is the thing they hope never to need. -->
+      <app-subject-card></app-subject-card>
       <app-password-card></app-password-card>
     </div>
   `,

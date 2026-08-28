@@ -26,10 +26,10 @@ public static class TestAuth
         return client;
     }
 
-    public static async Task<HttpClient> RegisterAndSignInTeacherAsync(ApiFactory factory, string email, string fullName = "Test Teacher", string password = "Password1")
+    public static async Task<HttpClient> RegisterAndSignInTeacherAsync(ApiFactory factory, string email, string fullName = "Test Teacher", string password = "Password1", string subject = "General Studies")
     {
         var anon = factory.CreateClient();
-        var response = await anon.PostAsJsonAsync("/api/auth/register/teacher", new { fullName, email, password });
+        var response = await anon.PostAsJsonAsync("/api/auth/register/teacher", new { fullName, email, password, subject });
         await EnsureSuccessAsync(response);
         return await SignedInClientAsync(factory, email, password);
     }

@@ -6,6 +6,14 @@ public class Teacher
     public User User { get; set; } = null!;
 
     public string JoinCode { get; set; } = string.Empty;
+
+    /// <summary>
+    /// What this teacher teaches, in their own words — "Mathematics", "Biology", "English
+    /// Literature". Nullable, and that null is a real state rather than a placeholder: every
+    /// teacher who registers is asked for it, but the rows that existed before the field did
+    /// have never been asked, and an empty string would claim they answered.
+    /// </summary>
+    public string? Subject { get; set; }
     public TeacherStatus Status { get; set; } = TeacherStatus.Pending;
     public DateTimeOffset? DecidedAtUtc { get; set; }
     public Guid? DecidedByUserId { get; set; }

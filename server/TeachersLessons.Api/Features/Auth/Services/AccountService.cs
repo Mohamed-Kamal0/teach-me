@@ -7,12 +7,14 @@ public interface IAccountService
 {
     Task<MeResponse> GetMeAsync(CancellationToken ct);
     Task ChangePasswordAsync(ChangePasswordRequest request, CancellationToken ct);
+    Task UpdateSubjectAsync(UpdateSubjectRequest request, CancellationToken ct);
 }
 
 public class AccountService(
     AppDbContext db,
     ICurrentUser currentUser,
     IValidator<ChangePasswordRequest> changePasswordValidator,
+    IValidator<UpdateSubjectRequest> subjectValidator,
     IPasswordHasher<User> passwordHasher) : IAccountService
 {
     public async Task<MeResponse> GetMeAsync(CancellationToken ct)
@@ -25,16 +27,21 @@ public class AccountService(
 
         string? teacherStatus = null;
         DateTimeOffset? teacherDecidedAtUtc = null;
+        string? subject = null;
         if (user.Role == UserRole.Teacher)
         {
             var teacher = await db.Teachers.Where(t => t.UserId == user.Id)
-                .Select(t => new { t.Status, t.DecidedAtUtc })
+                .Select(t => new { t.Status, t.DecidedAtUtc, t.Subject })
                 .FirstAsync(ct);
             teacherStatus = teacher.Status.ToString();
             teacherDecidedAtUtc = teacher.DecidedAtUtc;
+            // Carried on identity for the same reason standing is: it is a fact about who is
+            // asking, and a second endpoint for one string would be a second thing to keep in
+            // step. Null for everyone who is not a teacher.
+            subject = teacher.Subject;
         }
 
-        return new MeResponse(user.Id, user.Email, user.FullName, user.Role.ToString(), teacherStatus, teacherDecidedAtUtc, photoETag);
+        return new MeResponse(user.Id, user.Email, user.FullName, user.Role.ToString(), teacherStatus, teacherDecidedAtUtc, photoETag, subject);
     }
 
     /// <summary>
@@ -64,6 +71,22 @@ public class AccountService(
         }
 
         user.PasswordHash = passwordHasher.HashPassword(user, request.NewPassword);
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Restates what the signed-in teacher teaches. Like the password reset above, the account is
+    /// taken from the cookie and never from the request, so there is no id in the body to point
+    /// at somebody else. A teacher who is still pending may call it: the subject is the one field
+    /// an administrator reads before deciding, and a typo in it should be fixable while waiting.
+    /// </summary>
+    public async Task UpdateSubjectAsync(UpdateSubjectRequest request, CancellationToken ct)
+    {
+        await subjectValidator.ValidateOrThrowAsync(request, ct);
+
+        var teacher = await db.Teachers.FirstAsync(t => t.UserId == currentUser.UserId, ct);
+        teacher.Subject = request.Subject.Trim();
+
         await db.SaveChangesAsync(ct);
     }
 }

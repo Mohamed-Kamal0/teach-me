@@ -28,4 +28,21 @@ public class MeController(IAccountService account) : ControllerBase
         await account.ChangePasswordAsync(request, ct);
         return NoContent();
     }
+
+    /// <summary>
+    /// Restates the subject the signed-in teacher teaches — the field the public directory
+    /// searches on alongside a name. `PUT`, because it replaces one value with another and
+    /// sending it twice leaves the account exactly where the first one left it.
+    ///
+    /// The role check is the plain `Teacher` role rather than the approved policy: nobody else
+    /// has a subject to state, but a teacher still waiting on a decision does, and it is the one
+    /// field an administrator reads before deciding on them.
+    /// </summary>
+    [HttpPut("subject")]
+    [Authorize(Roles = nameof(UserRole.Teacher))]
+    public async Task<IActionResult> UpdateSubject(UpdateSubjectRequest request, CancellationToken ct)
+    {
+        await account.UpdateSubjectAsync(request, ct);
+        return NoContent();
+    }
 }

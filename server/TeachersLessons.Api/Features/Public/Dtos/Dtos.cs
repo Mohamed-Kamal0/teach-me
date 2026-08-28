@@ -12,6 +12,7 @@ public record HomeResponse(int ApprovedTeacherCount, int LessonCount, string How
 public record PublicTeacherDto(
     Guid UserId,
     string FullName,
+    string? Subject,           // what they teach, in their own words; null for a row that predates the field
     string? PhotoETag,
     DateTimeOffset MemberSinceUtc,
     int OpenLessonCount,        // released — OpensAtUtc <= now

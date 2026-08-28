@@ -14,6 +14,8 @@ public class TeacherConfiguration : IEntityTypeConfiguration<Teacher>
         builder.Property(t => t.JoinCode).HasMaxLength(8).IsRequired();
         builder.HasIndex(t => t.JoinCode).IsUnique();
 
+        builder.Property(t => t.Subject).HasMaxLength(60);
+
         builder.Property(t => t.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(t => t.DecidedAtUtc);
 
