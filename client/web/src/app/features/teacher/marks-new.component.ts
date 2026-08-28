@@ -8,7 +8,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { BusyRingComponent } from '../../shared/busy-ring.component';
 import { forkJoin } from 'rxjs';
 import { Lesson, PagedResult, ProblemDetails, StudentSummary, TeacherStudentsResponse } from '../../core/models';
 import { applyServerErrors, fieldMessage, revealErrors } from '../../core/form-errors';
@@ -20,7 +20,7 @@ import { NotifyService } from '../../core/notify.service';
   standalone: true,
   imports: [
     ReactiveFormsModule, RouterLink, MatFormFieldModule, MatSelectModule, MatInputModule,
-    MatButtonModule, MatCardModule, MatIconModule, MatProgressSpinnerModule
+    MatButtonModule, MatCardModule, MatIconModule, BusyRingComponent
   ],
   template: `
     <div class="form-page">
@@ -81,7 +81,7 @@ import { NotifyService } from '../../core/notify.service';
 
               <div class="actions">
                 <button mat-flat-button color="primary" type="submit" [disabled]="submitting()">
-                  @if (submitting()) { <mat-spinner diameter="20"></mat-spinner> } @else { Record mark }
+                  @if (submitting()) { <app-busy-ring size="20px"></app-busy-ring> } @else { Record mark }
                 </button>
                 <a mat-button routerLink="/teacher/students">Cancel</a>
               </div>

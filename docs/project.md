@@ -18,7 +18,7 @@ A **student registers on their own and belongs to nobody** — an account and a 
 >
 > 1. It does not host, upload or convert files — the recording and the handout are both _links_.
 > 2. It has no quiz engine: no question banks, no options, no auto-marking.
-> 3. There is no password reset, and no notification leaves the app — both need email.
+> 3. There is no password reset, and no notification leaves the app — both need email. _(See the addendum: a reset that needs no email was built; the no-email half stands.)_
 > 4. The helper is not an AI: it is a list of phrases you write, matched to screens.
 
 > **The moment you demo:**
@@ -126,3 +126,47 @@ Twenty-three outcomes, each carrying the way it is allowed to **fail**. Both hal
 | **Student**, on none yet   | Their profile, the joining screen, the helper. Every course call answers **403**.                                                                                           |
 
 **Three kinds of person and no fourth.** Two register themselves; the third never did. Signed out, only the home page and the two registration forms answer — everything else is a **401**. **One email belongs to one person** across all three, the administrator's own address included, and no single table can promise that.
+
+---
+
+## Addendum — what was built beyond this brief
+
+_Added 2026-08-28. Everything above is the client's brief as given, unchanged. Everything below was built **after** all twenty-three requirements were passing, and is recorded here so that the brief and the thing that exists do not quietly disagree._
+
+**All twenty-three requirements still hold.** Nothing in this addendum replaced a requirement, relaxed a failure rule, or removed a screen. Each extension has its own plan file, and each is folded into [`plan.md`](plan.md) §12 rather than left to drift. End to end, every feature — original and added — is walked through in [`FEATURES.md`](FEATURES.md).
+
+| Added                                   | Plan                         | What it is                                                                                                    |
+| :-------------------------------------- | :--------------------------- | :------------------------------------------------------------------------------------------------------------- |
+| **Profile photos**                      | [`media.md`](media.md)       | Anyone signed in may set one photo. Every upload is re-encoded to a 256×256 WebP and stored in the database.  |
+| **A public teacher directory**          | [`discover.md`](discover.md) | `/teachers` — every approved teacher and their own course's numbers, readable with no session at all.          |
+| **A student profile for the teacher**   | [`discover.md`](discover.md) | The teacher's student row opens a person, not a dead end: details, photo, and their marks in lesson order.     |
+| **The helper became an AI**             | [`ai.md`](ai.md)             | It answers from the asking student's own courses, lessons and marks — with the phrase list still underneath.   |
+| **Resetting your own password**         | [`plan.md` §12.4](plan.md)   | `PUT /api/me/password` — the current password is the proof of identity, so no mail has to leave the app.        |
+
+### The one line of this brief that no longer holds
+
+> _"Four things this app is not"_, item 4: **The helper is not an AI: it is a list of phrases you write, matched to screens.**
+
+That line was a **scope fence**, not an architecture requirement — it existed so Req 18 could not balloon into a chatbot project, and it did its job. The fence is now removed, on three conditions, all of which are met and tested:
+
+1. **The phrase list is still wired in as the floor.** With no API key configured, the service graph does not even contain the AI path: the app behaves exactly as it did, byte for byte, and Req 18 passes on its own terms. Turning the feature off in production is one unset secret, no deploy.
+2. **Req 19 is not weakened.** The model is never given a tool, a connection or a query. It is shown one JSON snapshot — _the context pack_ — assembled only from values the asking student's own endpoints already return, through the same `LessonQueries.VisibleTo` projection every other student-facing read uses. A lesson whose moment has not come is absent from the pack, so the model cannot leak a title it was never shown. The pack carries **no URL at all** and **no future date**.
+3. **Req 18's failure rule still fires.** _"A question it does not know says so, and lists what it does know"_ — when the model says it does not know, the phrase list answers, unknown-topic list and all. And _"somebody on no courses is offered the joining screen, never a course"_ is applied to the model's answer by the same code that applies it to the phrase list's.
+
+Two of the other three "is not" items are untouched and remain true: **the recording and the handout are still links, never uploads** (a profile photo is a photo of a person, not course material), and **there is still no quiz engine**.
+
+The third — _"there is no password reset, and no notification leaves the app — both need email"_ — is now **half true, and the half that changed is the half that never needed email in the first place.** The brief bundled two things under one cause. Only one of them actually depends on mail:
+
+| The two halves of item 3        | Still true? | Why                                                                                                                                      |
+| :------------------------------ | :---------- | :--------------------------------------------------------------------------------------------------------------------------------------- |
+| _No notification leaves the app_ | **Yes**     | Nothing is sent anywhere. There is no SMTP client, no queue and no outbound address in the solution.                                       |
+| _No password reset_              | **No**      | A **signed-in** reset needs no message at all: the proof of identity is the current password, which the person types, and nothing is sent. |
+
+What email actually buys is the **forgotten**-password case — proving identity to someone who cannot sign in. That still does not exist, and cannot without a mailbox. What was built is the case underneath it: **anybody signed in can reset their own password from their own profile page**, teacher, student and administrator alike. That matters most for the administrator, whose first password is seeded from `Seed:AdminPassword` and therefore also lives in a config file, a deploy script and somebody's shell history; `DbSeeder` only ever *inserts*, so a password changed in the app is the password from then on and the seeded one can stop being a live credential.
+
+### The demo script, extended
+
+The brief's own demo script runs unchanged. Two moments were added to the end of it, and both are things a visitor can see before they have an account:
+
+- open `/teachers` **signed out** — the approved teachers are listed with their photos and their own course's numbers, and the raw response carries neither an email nor a joining code;
+- ask the helper _"how did I do on the last quiz"_ as a signed-in student — it answers from that student's actual marks, and the "Take me there" button only appears for a screen that student is genuinely entitled to.

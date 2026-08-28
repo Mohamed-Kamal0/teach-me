@@ -6,7 +6,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { BusyRingComponent } from '../../shared/busy-ring.component';
 import { AuthService } from '../../core/auth.service';
 import { applyServerErrors, fieldMessage, revealErrors } from '../../core/form-errors';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
@@ -16,7 +16,7 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
   standalone: true,
   imports: [
     ReactiveFormsModule, RouterLink, MatFormFieldModule, MatInputModule, MatButtonModule,
-    MatCardModule, MatIconModule, MatProgressSpinnerModule
+    MatCardModule, MatIconModule, BusyRingComponent
   ],
   template: `
     <div class="form-page">
@@ -39,7 +39,14 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
 
             <mat-form-field appearance="outline">
               <mat-label>Password</mat-label>
-              <input matInput type="password" formControlName="password" autocomplete="current-password" />
+              <input matInput [type]="reveal() ? 'text' : 'password'" formControlName="password"
+                autocomplete="current-password" />
+              <button mat-icon-button matSuffix type="button" tabindex="-1"
+                (click)="reveal.set(!reveal())"
+                [attr.aria-label]="reveal() ? 'Hide password' : 'Show password'"
+                [attr.aria-pressed]="reveal()">
+                <mat-icon>{{ reveal() ? 'visibility_off' : 'visibility' }}</mat-icon>
+              </button>
               @if (message('password', 'Password'); as msg) { <mat-error>{{ msg }}</mat-error> }
             </mat-form-field>
 
@@ -51,7 +58,7 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
             }
 
             <button mat-flat-button color="primary" type="submit" [disabled]="submitting()">
-              @if (submitting()) { <mat-spinner diameter="20"></mat-spinner> } @else { Sign in }
+              @if (submitting()) { <app-busy-ring size="20px"></app-busy-ring> } @else { Sign in }
             </button>
           </form>
         </mat-card-content>
@@ -75,6 +82,10 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
   `]
 })
 export class LoginComponent implements OnInit {
+  /** A password box you cannot read is how a typo becomes "email or password is incorrect".
+   *  The toggle is `tabindex="-1"` so it never sits between the box and the submit button. */
+  readonly reveal = signal(false);
+
   submitting = signal(false);
   /** Whatever the server said that did not belong to one field. */
   banner = signal<string | null>(null);

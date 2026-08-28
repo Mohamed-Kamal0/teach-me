@@ -48,6 +48,18 @@ export class AuthService {
     await firstValueFrom(this.http.post('/api/auth/register/student', { fullName, email, password }));
   }
 
+  /**
+   * Resets the signed-in person's own password. The current one is the proof of identity — this
+   * app sends no mail, so there is no link to click and no address to be stolen; the reset is
+   * only reachable by whoever already holds the session.
+   *
+   * Nothing about the session changes, so `me` is not refreshed: the cookie carries id, email
+   * and role, and none of the three has moved.
+   */
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await firstValueFrom(this.http.put('/api/me/password', { currentPassword, newPassword }));
+  }
+
   /** Drops the session this tab knows about. Called on sign-out, and by the error interceptor
    * when the server says a request was unauthenticated. */
   clearSession(): void {

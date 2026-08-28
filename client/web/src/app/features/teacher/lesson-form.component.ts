@@ -7,7 +7,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { BusyRingComponent } from '../../shared/busy-ring.component';
 import { Lesson, LessonRequest, ProblemDetails } from '../../core/models';
 import { applyServerErrors, fieldMessage, revealErrors } from '../../core/form-errors';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
@@ -25,7 +25,7 @@ function passMarkWithinTotal(group: AbstractControl): ValidationErrors | null {
   standalone: true,
   imports: [
     ReactiveFormsModule, RouterLink, MatFormFieldModule, MatInputModule, MatButtonModule,
-    MatCardModule, MatIconModule, MatProgressSpinnerModule
+    MatCardModule, MatIconModule, BusyRingComponent
   ],
   template: `
     <div class="form-page">
@@ -154,7 +154,7 @@ function passMarkWithinTotal(group: AbstractControl): ValidationErrors | null {
 
               <div class="actions">
                 <button mat-flat-button color="primary" type="submit" [disabled]="submitting()">
-                  @if (submitting()) { <mat-spinner diameter="20"></mat-spinner> }
+                  @if (submitting()) { <app-busy-ring size="20px"></app-busy-ring> }
                   @else { {{ isEdit() ? 'Save changes' : 'Create lesson' }} }
                 </button>
                 <a mat-button routerLink="/teacher/lessons">Cancel</a>

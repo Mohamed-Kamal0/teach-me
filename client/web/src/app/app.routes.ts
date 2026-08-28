@@ -18,6 +18,12 @@ export const routes: Routes = [
   },
 
   {
+    path: 'admin/profile',
+    canActivate: [roleGuard('Admin')],
+    loadComponent: () => import('./features/admin/profile.component').then(m => m.AdminProfileComponent)
+  },
+
+  {
     path: 'teacher/standing',
     canActivate: [roleGuard('Teacher')],
     loadComponent: () => import('./features/teacher/standing.component').then(m => m.TeacherStandingComponent)
@@ -31,6 +37,12 @@ export const routes: Routes = [
     path: 'teacher/lessons/new',
     canActivate: [roleGuard('Teacher'), teacherApprovedGuard],
     loadComponent: () => import('./features/teacher/lesson-form.component').then(m => m.LessonFormComponent)
+  },
+  {
+    // Declared after 'new', or the literal segment would be read as an :id.
+    path: 'teacher/lessons/:id',
+    canActivate: [roleGuard('Teacher'), teacherApprovedGuard],
+    loadComponent: () => import('./features/teacher/lesson-detail.component').then(m => m.LessonDetailComponent)
   },
   {
     path: 'teacher/lessons/:id/edit',

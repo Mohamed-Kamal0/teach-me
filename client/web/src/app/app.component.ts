@@ -119,6 +119,7 @@ export class AppComponent {
     switch (this.auth.role()) {
       case 'Student': return '/student/profile';
       case 'Teacher': return '/teacher/profile';
+      case 'Admin': return '/admin/profile';
       default: return null;
     }
   }

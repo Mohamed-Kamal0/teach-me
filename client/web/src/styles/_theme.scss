@@ -119,6 +119,11 @@ table, .tabular-nums { font-variant-numeric: tabular-nums; }
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+
+  // ...except a spinner. The blanket rule above is right for decoration and wrong for the one
+  // element whose entire meaning IS the motion: it would stop the ring a hundredth of a
+  // millisecond in, and what is left on screen reads as a rendering fault rather than as
+  // "working". `app-busy-ring` slows itself instead of stopping — see busy-ring.component.ts.
 }
 
 // ---- Text roles ------------------------------------------------------------
@@ -365,6 +370,37 @@ table, .tabular-nums { font-variant-numeric: tabular-nums; }
   letter-spacing: 0.01em;
   font-weight: 500;
   border-radius: 999px;
+}
+
+// ---- A button that is working ---------------------------------------------
+// Every submit in the app disables itself while its request is in flight, which is right — the
+// same upload must not be sent twice. But Material draws *disabled* one way only: a faint grey
+// label on a faint grey container. That is the correct picture for "you may not press this" and
+// the wrong one for "this is doing the thing you pressed it for", and the ring placed inside
+// inherits the greyed label colour onto the greyed fill, so the one element that is supposed to
+// say "working" becomes the hardest thing on the card to see.
+//
+// `:has(app-busy-ring)` separates the two states without a flag on every component: a disabled
+// button holding a ring is busy, and a busy button keeps its own colours and lends them to the
+// ring. Opacity, not greyness, carries "not pressable".
+.mat-mdc-button-base:has(app-busy-ring) { cursor: progress; }
+
+.mat-mdc-unelevated-button.mat-primary:has(app-busy-ring):disabled,
+.mat-mdc-raised-button.mat-primary:has(app-busy-ring):disabled {
+  --mdc-filled-button-disabled-container-color: var(--primary);
+  --mdc-filled-button-disabled-label-text-color: #fff;
+  background-color: var(--primary);
+  color: #fff;
+  opacity: 0.9;
+}
+
+// Ring and word travel together. A button that swaps its label for a bare ring loses its width
+// at the moment of the press, and the row it sits in jumps; this keeps the width and says which
+// of the two things the button does is happening.
+.btn-busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 a { color: var(--primary); }

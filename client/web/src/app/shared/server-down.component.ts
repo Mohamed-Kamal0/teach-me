@@ -1,13 +1,13 @@
 import { Component, inject, signal } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { BusyRingComponent } from './busy-ring.component';
 import { AuthService } from '../core/auth.service';
 
 @Component({
   selector: 'app-server-down',
   standalone: true,
-  imports: [MatIconModule, MatButtonModule, MatProgressSpinnerModule],
+  imports: [MatIconModule, MatButtonModule, BusyRingComponent],
   template: `
     <div class="wrap" role="alert">
       <span class="badge"><mat-icon>cloud_off</mat-icon></span>
@@ -16,7 +16,7 @@ import { AuthService } from '../core/auth.service';
       <p class="text-muted">You may still be signed in — the app just can't talk to the API right
       now. Try again once the connection is back.</p>
       <button mat-flat-button color="primary" (click)="retry()" [disabled]="checking()">
-        @if (checking()) { <mat-spinner diameter="20"></mat-spinner> } @else { Try again }
+        @if (checking()) { <app-busy-ring size="20px"></app-busy-ring> } @else { Try again }
       </button>
       @if (failedAgain()) {
         <p class="text-danger">Still no answer. The API is not responding yet.</p>

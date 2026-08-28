@@ -3,8 +3,16 @@
 > Companion to [`project.md`](project.md). The brief says **what** must work and **how it may fail**; it deliberately leaves **how it is built** undecided. This file is that decision.
 >
 > **Revised twice, 2026-08-25** — against [`MohamedKamal_plan-review.md`](MohamedKamal_plan-review.md) and then [`MohamedKamal_FINAL-REVIEW.md`](MohamedKamal_FINAL-REVIEW.md). All eleven items are closed; what changed, and the one thing I declined to change, is in **Appendix B**.
+>
+> **Extended, 2026-08-28.** Three features were built after the twenty-three requirements were
+> passing, each with its own plan file, and each folded back into the tables below rather than
+> left to drift: **profile photos** ([`media.md`](media.md)), the **public teacher directory and
+> the teacher's student profile** ([`discover.md`](discover.md)), and the **AI helper**
+> ([`ai.md`](ai.md)). **§12** is the one-page summary of all three; the sections above it are
+> the plan of record and have been updated in place. Nothing here was cut to make room —
+> every original requirement still holds, and the AI helper keeps the phrase list underneath it.
 
-**Stack:** ASP.NET Core 10 Web API + EF Core (SQLite) · Angular 18 + Angular Material · httpOnly cookie auth.
+**Stack:** ASP.NET Core 10 Web API + EF Core (SQLite) · Angular 18 + Angular Material · httpOnly cookie auth · ImageSharp for photos · Google Gemini behind one interface for the helper.
 
 ---
 
@@ -22,6 +30,8 @@
 | Tests      | xUnit + `WebApplicationFactory` + **`Microsoft.Data.Sqlite`** in-memory (§10)     | Four server-side rules cannot be clicked into confidence — and only real SQLite enforces the indexes they test |
 | Client     | Angular 18, standalone components + signals                                       | The globally installed CLI is 18.2.21 — no workspace/CLI drift                                                 |
 | UI         | Angular Material + CDK, custom educational theme (§8)                             | Tables, dialogs, `mat-error` slots, datepickers, spinners — the least hand-written CSS for Req 23              |
+| Images     | `SixLabors.ImageSharp` — every upload re-encoded to a 256×256 WebP (§12.1)        | The bytes served are always ours, so a disguised payload never survives the round trip                        |
+| AI         | `Google.GenAI` → `gemini-3.5-flash-lite`, behind one `IAnswerModel` (§12.3)       | One seam means the vendor is swappable, the tests are free, and an unset key is a complete rollback           |
 
 **Local environment (verified):** .NET SDK 10.0.303 · `dotnet-ef` 10.0.10 · Node 22.14.0 · Angular CLI 18.2.21 · **no SQL Server engine** (Client SDK only), which is why SQLite was chosen.
 
@@ -31,9 +41,13 @@
 
 ```
 The Project/
-  README.md                       # clean-clone instructions, §11
-  project.md                      # the brief (given)
-  plan.md                         # this file
+  README.md                       # clean-clone instructions, §11 — the one file kept at the root
+  docs/                           # every other document, so the root of the repo stays readable
+    project.md                    # the brief (given)
+    plan.md                       # this file
+    FEATURES.md                   # every feature end to end, with the code that implements it
+    DEPLOY.md                     # the runbook
+    media.md / discover.md / ai.md  # the plan behind each of the three later features
   TeachersLessons.sln
   server/TeachersLessons.Api/
     Program.cs
@@ -41,25 +55,35 @@ The Project/
     Data/                         # AppDbContext, IEntityTypeConfiguration<T>, DbSeeder, DemoSeeder
     Features/
       Auth/  Admin/  Teacher/  Student/  Public/  Helper/
-                                  # controller + DTOs + validators, one folder per area
+                                  # controller + DTOs + validators + services, one folder per area
+        Auth/Controllers/PhotoController.cs      # §12.1 — upload, delete, serve, public serve
+        Helper/Services/                         # §12.3 — HelperService (phrase list),
+                                  #   AiHelperService (the decorator over it), IAnswerModel,
+                                  #   GeminiAnswerModel, StudentContextPackBuilder,
+                                  #   HelperRateLimiter, HelperSystemPromptProvider
     Common/                       # CurrentUser, cookie + antiforgery setup, ApiExceptionMiddleware,
-                                  # policies, PagedResult<T>
+                                  # policies, PagedResult<T>, LessonQueries.VisibleTo,
+                                  # AvatarImageProcessor, ServiceRegistration
     Migrations/
-    helper-intents.json           # Req 18 phrase list — content, not code
-  server/TeachersLessons.Api.Tests/   # the four rule suites, §10
+    helper-intents.json           # Req 18 phrase list — content, not code, and the helper's floor
+    helper-system-prompt.md       # §12.3 the AI helper's instructions — content too
+  server/TeachersLessons.Api.Tests/   # the rule suites, §10
   client/web/                     # ng new web --standalone --routing --style=scss
     proxy.conf.json               # /api -> the API, so the cookie is same-origin in dev
+    smoke.mjs / smoke-api-down.mjs  # Playwright: the demo script, and the API killed underneath it
     src/styles/_theme.scss        # the educational theme, §8
     src/app/core/                 # auth service, credentials + error interceptors, guards, api clients
-    src/app/shared/               # StatePanelComponent (loading | error | empty) — used by every list
-    src/app/features/             # home, auth, admin, teacher, student, helper
+    src/app/shared/               # StatePanelComponent (loading | error | empty), MediaEmbedComponent,
+                                  # AvatarComponent, PhotoCardComponent, ReleaseRailComponent, dialogs
+    src/app/features/             # home, teachers (public directory), auth, admin, teacher,
+                                  # student, helper
 ```
 
 **Feature folders, not layered Clean Architecture.** Four days, one developer: a `Domain / Application / Infrastructure / Api` split buys indirection this scope never spends.
 
 ---
 
-## 3. Data model — six tables
+## 3. Data model — seven tables
 
 The brief's closing line is the design driver:
 
@@ -156,6 +180,30 @@ Single create and edit keep rule **L3** and its 400. Reordering is a different o
 
 **Unique (`LessonId`, `StudentUserId`)** — Req 22's "no second mark for the same student on the same lesson", enforced by the database. Passed/failed is **never stored**: it is derived at read time from `Score >= Lesson.PassMark`, which is structurally why the browser can never send it up.
 
+### `Avatars` — one person's profile photo (§12.1)
+
+Added 2026-08-28. The seventh table, and the only one that holds bytes.
+
+| Column         | Type             | Notes                                                                     |
+| :------------- | :--------------- | :------------------------------------------------------------------------ |
+| `UserId`       | `Guid`           | **PK = FK to `Users.Id`**, 1:0..1 — the row's existence *is* "has a photo" |
+| `Bytes`        | `byte[]`         | always WebP, always 256×256, **always produced by our own encoder**       |
+| `ContentType`  | `string`         | always `image/webp` — stored, not trusted from the upload                 |
+| `ByteSize`     | `int`            | capped at 200 KB by the processor                                         |
+| `ETag`         | `string`         | `"<md5 hex>"`, rewritten on every write — what makes 304s and cache-busting work |
+| `UpdatedAtUtc` | `DateTimeOffset` |                                                                           |
+
+**A separate table, not a column on `Users`.** A `byte[]` column on `Users` would be loaded by
+every query that touches a user — the login path, the admin list, every join — and EF Core cannot
+be told to skip it without a projection on every one of them. As its own table it is read only
+when someone asks for a photo, and `null` costs nothing.
+
+**The row's existence is the flag, and `ETag` is what the client is told.** No DTO carries image
+bytes: every payload that shows a person carries `photoETag`, a `string?`. Non-null means "there
+is a photo, fetch it at `/api/users/{id}/photo`, and this string is its version"; null means "draw
+the initials tile". One nullable string is the whole contract, and it doubles as the cache-buster
+— a new photo is a new ETag is a new URL.
+
 ### Relationships and delete behavior
 
 - `Users` → `Teachers` / `Students` : **Cascade** — a profile cannot outlive its login.
@@ -163,6 +211,7 @@ Single create and edit keep rule **L3** and its 400. Reordering is a different o
 - `Students` → `Enrollments`, `Marks` : **Cascade**.
 - `Lessons` → `Marks` : **Restrict** — this turns Req 8's _"refused if marks exist"_ into a database guarantee rather than a controller convention. The API translates it into a **409**.
 - `Teachers.DecidedByUserId` : **Restrict** — an audit trail should not evaporate.
+- `Users` → `Avatars` : **Cascade** — a photo cannot outlive the person, and deleting the row is how "remove my photo" is implemented.
 
 **One consequence to know about:** `Teachers → Lessons` cascades but `Lessons → Marks` restricts, so deleting a teacher whose lessons carry marks **fails at the database**. That is the right default for a teaching record, and no endpoint deletes a teacher — but it will surprise you from a SQLite browser.
 
@@ -186,8 +235,14 @@ The caller is always resolved from the **auth cookie**, never from the URL. Ever
 | `POST /api/auth/login`                              | anyone             | 200 `{role, teacherStatus?}` + `Set-Cookie` (nothing in the body) | 401 _"Email or password is incorrect"_ (never which half), 400 validation   |
 | `POST /api/auth/logout`                             | any signed-in      | 204 + cookie cleared                                              | —                                                                           |
 | `GET /api/public/home`                              | anyone, no cookie  | 200 `{approvedTeacherCount, lessonCount, howToJoin}`              | — must read `0` on an empty database                                        |
+| `GET /api/public/teachers?page=&pageSize=&q=`       | anyone, no cookie  | 200 paged `PublicTeacherDto` — **approved only**, open lessons desc then name | — legitimately empty (§12.2)                                    |
+| `GET /api/public/teachers/{userId}/photo`           | anyone, no cookie  | 200 `image/webp` + `ETag`, `public, max-age=300` · 304 on `If-None-Match` | **404** for no photo **and** for a teacher who is not approved — identically (§12.2) |
 | `GET /api/health`                                   | anyone, no cookie  | 200 `{status, db}`                                                | 503 if the database is unreachable                                          |
-| `GET /api/me`                                       | any signed-in      | 200 identity + standing                                           | —                                                                           |
+| `GET /api/me`                                       | any signed-in      | 200 identity + standing + `photoETag`                             | —                                                                           |
+| `PUT /api/me/password`                              | any signed-in      | 204 — nothing echoed back, session undisturbed                    | 400 wrong current password (named on `currentPassword`), 400 policy, 400 reuse (§12.4) |
+| `PUT /api/me/photo` (multipart `file`)              | any signed-in      | 200 `{photoETag, updatedAtUtc}` — re-encoded to 256×256 WebP      | 400 not an image / undecodable / wrong content type, **413 over 5 MB** (§12.1) |
+| `DELETE /api/me/photo`                              | any signed-in      | 204 — idempotent; 204 even when there was none                    | —                                                                           |
+| `GET /api/users/{userId}/photo`                     | any signed-in      | 200 `image/webp` + `ETag`, `private, max-age=300` · 304           | 404 no photo                                                                |
 | `GET /api/admin/teachers?status=`                   | Admin              | 200 paged                                                         | 403                                                                         |
 | `POST /api/admin/teachers/{id}/approve`             | Admin              | 204                                                               | 403, 404, **409 already decided**                                           |
 | `POST /api/admin/teachers/{id}/reject`              | Admin              | 204                                                               | 403, 404, **409 already decided**                                           |
@@ -197,7 +252,7 @@ The caller is always resolved from the **auth cookie**, never from the URL. Ever
 | `PUT /api/teacher/lessons/order`                    | Teacher · Approved | 204 — two-phase renumber in one transaction (§3)                  | 400 (§5 R1–R2), 403                                                         |
 | `DELETE /api/teacher/lessons/{id}`                  | Teacher · Approved | 204                                                               | **409 marks exist**, 404, 403                                               |
 | `GET /api/teacher/students`                         | Teacher · Approved | 200 `{joinCode, students[]}` paged, name asc                      | 403                                                                         |
-| `GET /api/teacher/students/{studentId}`             | Teacher · Approved | 200 marks in lesson order                                         | **404** unknown or not theirs, 403                                          |
+| `GET /api/teacher/students/{studentId}`             | Teacher · Approved | 200 **a student profile** — details, `photoETag`, counts, then marks in lesson order (§12.2) | **404** unknown or not theirs, 403                    |
 | `POST /api/teacher/marks`                           | Teacher · Approved | 201                                                               | 400 score out of range, **409 duplicate**, 404 not your student/lesson, 403 |
 | `PUT /api/teacher/marks/{id}`                       | Teacher · Approved | 200                                                               | 400, 404, 403                                                               |
 | `GET /api/teacher/progress`                         | Teacher · Approved | 200 paged (reads `0`, never spins)                                | 403                                                                         |
@@ -209,7 +264,7 @@ The caller is always resolved from the **auth cookie**, never from the URL. Ever
 | `POST /api/student/courses/{teacherId}/seen`        | Student · Enrolled | 204 — stamps `LastViewedAtUtc`                                    | 403                                                                         |
 | `GET /api/student/whats-new`                        | Student            | 200 per-course + total                                            | 403                                                                         |
 | `GET /api/student/marks`                            | Student            | 200 own marks only                                                | 403                                                                         |
-| `GET /api/helper/ask?q=`                            | Student            | 200 `{answer, route?}` or `{unknown, knownTopics[]}`              | 403                                                                         |
+| `GET /api/helper/ask?q=`                            | Student            | 200 `{answer, route?}` or `{unknown, knownTopics[]}`              | 403 · 400 empty or over `Ai:MaxQuestionLength` · **never 5xx, never 429** (§12.3) |
 
 ### Status-code convention — one rule, applied everywhere
 
@@ -296,6 +351,23 @@ The uniqueness check runs as a query **and** is backed by the unique index, so t
 | both       | wrong pair → `401`      | **"Email or password is incorrect."** — never which half is wrong |
 
 The single message is deliberate: saying "no account with that email" tells a stranger which addresses are registered.
+
+### Resetting your own password (§12.4)
+
+| Field             | Rule                                                              | Message                                                  |
+| :---------------- | :---------------------------------------------------------------- | :------------------------------------------------------- |
+| `currentPassword` | required                                                          | "Enter your current password."                           |
+| `currentPassword` | must verify against the stored hash → `400` on `currentPassword`  | "That isn't your current password."                      |
+| `newPassword`     | **the same rule registration uses**, from the same code           | "Use at least 8 characters, with a letter and a number." |
+| `newPassword`     | must not verify against the current hash → `400` on `newPassword` | "Choose a password you aren't already using."            |
+| `confirmPassword` | must match `newPassword` — **client only, never sent**            | "Those passwords don't match."                           |
+
+Two deliberate differences from sign-in:
+
+- **The message is specific here, and vague there.** Sign-in must not reveal whether an address is registered, so both halves get one message. This endpoint is behind a session the caller already holds — telling them "that isn't your current password" reveals nothing they could not confirm by signing out and back in — so the message goes under the box it belongs to and says which of the three fields is wrong.
+- **The policy is not restated, it is reused.** `ChangePasswordRequestValidator` calls the same `RegistrationRules.Password()` extension `RegisterStudentRequestValidator` calls. There is one password policy in the solution and one string stating it, so the screen that first sets a password and the screen that resets it cannot drift apart.
+
+**What is deliberately not here.** "Is the current password right" is not a validator rule. A validator answers questions about the *shape* of a request; that question is answered against the stored hash, in `AccountService`, which is the only place allowed to touch it.
 
 ### Joining a course (Req 5)
 
@@ -395,11 +467,11 @@ Per **enrollment**, comparing the three moments against that row's own `LastView
 
 | Area     | Routes                                                                                                                                                                                       |
 | :------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Public   | `/` · `/login` · `/register/teacher` · `/register/student`                                                                                                                                   |
-| Admin    | `/admin/approvals`                                                                                                                                                                           |
-| Teacher  | `/teacher/standing` · `/teacher/lessons` · `/teacher/lessons/new` · `/teacher/lessons/:id/edit` · `/teacher/students` · `/teacher/students/:id` · `/teacher/marks/new` · `/teacher/progress` |
-| Student  | `/student/profile` · `/student/join` · `/student/courses` · `/student/courses/:teacherId` · `/student/whats-new`                                                                             |
-| Fallback | `**` → not-found screen (Req 13 lands here, not on a crash)                                                                                                                                  |
+| Public   | `/` · **`/teachers`** (the directory, §12.2 — no guard) · `/login` · `/register/teacher` · `/register/student`                                                                              |
+| Admin    | `/admin/approvals` · **`/admin/profile`** (photo + password, §12.4 — the screen that lets the seeded `Seed:AdminPassword` stop being a live credential) |
+| Teacher  | `/teacher/standing` · `/teacher/lessons` · `/teacher/lessons/new` · `/teacher/lessons/:id/edit` · `/teacher/students` · `/teacher/students/:studentId` · `/teacher/marks/new` · `/teacher/progress` · **`/teacher/profile`** (photo §12.1 + password §12.4 — role guard only, so a pending teacher can still do both) |
+| Student  | `/student/profile` · `/student/join` · `/student/courses` · `/student/courses/:teacherId` · `/student/whats-new` · `/student/marks`                                                          |
+| Fallback | `/server-down` · `/not-found` · `**` → not-found screen (Req 13 lands here, not on a crash)                                                                                                  |
 
 **Guards:** `authGuard`, `roleGuard('Admin' | 'Teacher' | 'Student')`, `teacherApprovedGuard` (redirects to `/teacher/standing`). All three read the `AuthService` signal populated by the `/api/me` bootstrap, never a decoded token.
 
@@ -444,8 +516,10 @@ The subject is teaching, and the interface should read that way: calm, bookish, 
 - **`StatePanelComponent`** renders **loading**, **error**, and **empty** for every list — one component, so the awkward cases exist on every screen rather than the rehearsed one.
 - **`errorInterceptor`** turns any network failure into that panel's error state, which is what makes "stop the API mid-demo" behave everywhere at once.
 - **`MediaEmbedComponent`** wraps the recording with a fallback message and a plain link when a URL will not embed (Req 15 — never a dead grey box).
+- **`AvatarComponent`** (§12.1) draws one person as a photo when `photoETag` is non-null and a deterministic initials tile otherwise — same colour for the same person every time, so a roster stays recognisable. Its `(error)` handler covers a photo deleted between payload and paint.
+- **`ReleaseRailComponent`** renders a lesson's three moments as one strip, so "open · quiz opens tomorrow · answers released" reads at a glance rather than as three scattered chips.
 
-**Helper (Req 18):** `helper-intents.json` is a list of `{ keywords[], answer, route }`, matched server-side by keyword overlap. No match returns the list of known topics. A student on no courses is always pointed at `/student/join`, never at a course.
+**Helper (Req 18):** `helper-intents.json` is a list of `{ keywords[], answer, route }`, matched server-side by keyword overlap. No match returns the list of known topics. A student on no courses is always pointed at `/student/join`, never at a course. **This is still the floor** — §12.3 puts an AI path in front of it, and every failure of that path lands back here.
 
 ---
 
@@ -532,9 +606,9 @@ The brief says _"your cut list matters more here than the list does."_ These are
 
 ## 10. Verification
 
-### Automated — the four rules that fail silently
+### Automated — the rules that fail silently
 
-Manual checks get run once, late, by a tired person. These four are the rules a click-through cannot give you confidence in, and they are the ones worth defending line by line.
+Manual checks get run once, late, by a tired person. These are the rules a click-through cannot give you confidence in, and they are the ones worth defending line by line. Four were planned for the twenty-three requirements (**A–D**); four more came with the extensions (**E–H**, §12). **Sixty tests in total**, `cd server && dotnet test`.
 
 **The test database, named once:** xUnit + `WebApplicationFactory` over **`Microsoft.Data.Sqlite`** in shared-cache in-memory mode — `Data Source=file:{guid}?mode=memory&cache=shared` — one database per test class, with the seeding connection **held open for the class's lifetime** (the database vanishes when the last connection closes). Fast, isolated, and disposable, with none of the file cleanup a temp `.db` needs.
 
@@ -545,9 +619,19 @@ Manual checks get run once, late, by a tired person. These four are the rules a 
 | **A** | Pending-teacher refusal | pending teacher → every teacher route answers 403 · rejected → 403 · approved → 200 · approval mid-session takes effect on the **next** call, no re-login                                                                                      |
 | **B** | Mark constraints        | second mark on the same lesson → 409 · `score = max` → 201 · `score = max + 1` → 400 · `score = -1` → 400 · the bound follows when the lesson's maximum changes · `passed` posted from the client is ignored                                   |
 | **C** | Timing enforcement      | quiz opening tomorrow → response has **no `quizUrl` key** (assert on the raw JSON, not the DTO) · lesson unopened → absent from the list **and** 404 by id · `TimeProvider` advanced → both appear · answers independent of quiz               |
-| **D** | Ownership isolation     | teacher B cannot read/edit/delete teacher A's lesson (404) · student cannot read a course they never joined (**403**, and the body is not an empty list) · student cannot read another student's marks · mark for a non-enrolled student → 404 |
+| **D** | Ownership isolation     | teacher B cannot read/edit/delete teacher A's lesson (404) · student cannot read a course they never joined (**403**, and the body is not an empty list) · student cannot read another student's marks · mark for a non-enrolled student → 404 · a student profile shows the **calling** teacher's marks and lesson count only |
+| **E** | Photos (§12.1)          | `AvatarImageProcessor`: any accepted upload comes out **256×256 WebP** whatever went in · a non-image is a 400, not an exception · an oversized declared dimension is refused before the decode. `AvatarEndpointTests`: upload → `photoETag` changes · `If-None-Match` → **304** · delete → 404 and the tile returns · over 5 MB → **413** |
+| **F** | Public directory (§12.2)| the anonymous directory answers **with no session** · lists **approved teachers only** · its raw body carries neither an email nor a join code · a teacher photo is public **only while that teacher is approved**, and "not approved" and "no photo" both answer 404 |
+| **G** | AI helper (§12.3)       | the context pack **excludes an unopened lesson and carries no URL at all** — asserted on the serialised pack, in suite C's style · one student's pack never mentions another · **every** failure path (no key · a model that throws · times out · returns unparseable JSON · invents a route · is rate-limited) answers **200 with the phrase-list answer**, never a 5xx |
+| **H** | Password reset (§12.4)  | the old password stops working and the new one starts · a wrong current password is a **400 that changes nothing** · the policy is enforced in registration's own words · reusing the current password is refused · signed out is **401** · a session **without the CSRF header is refused and the password is unchanged** · one person's reset leaves every other account alone · the administrator can replace the seeded password |
 
-Suite C asserts against `response.Content.ReadAsStringAsync()`, not a deserialised object — a missing key and a null key deserialise identically, and the difference is the entire requirement.
+Suite C asserts against `response.Content.ReadAsStringAsync()`, not a deserialised object — a missing key and a null key deserialise identically, and the difference is the entire requirement. **Suite G borrows that discipline**: it asserts on the serialised context pack rather than the object, because the question is what the model was *shown*, and a field that serialises is a field that was shown.
+
+Suite G injects a fake at `IAnswerModel`, the one seam between the helper and a model vendor, so **no test in CI spends a cent or needs a network**. `AiHelperLiveTests` is the single exception, skipped unless `HELPER_LIVE=1` — it exists so a real key is exercised *before* a demo, not during one, and it asserts that the **model** answered rather than merely that the endpoint did (every failure path degrades to a 200, so a test reading only the status would pass with a dead key).
+
+### Automated — the browser, optional
+
+`client/web/smoke.mjs` drives the real UI through the brief's demo script with Playwright — twenty checks, including that an unopened lesson never reaches the page and an unopened quiz renders a message rather than a dead control. `smoke-api-down.mjs` covers Req 23's hardest case: it kills the API underneath a signed-in session and checks that every screen says so, both when navigating inside the app and after a cold reload. Point either at a deployment with `SMOKE_BASE`.
 
 ### Manual — the raw-response check
 
@@ -573,10 +657,18 @@ approve a teacher → add a lesson whose quiz opens tomorrow → register a stud
 
 Two values are secret and neither belongs in `appsettings.json`:
 
-| Setting                                  | Dev                   | What it is                                                               |
-| :--------------------------------------- | :-------------------- | :----------------------------------------------------------------------- |
-| `Auth:DataProtectionKey`                 | `dotnet user-secrets` | signs the auth cookie; a fixed key stops sessions dying on every restart |
-| `Seed:AdminEmail` / `Seed:AdminPassword` | `dotnet user-secrets` | the seeded administrator                                                 |
+| Setting                                  | Dev                   | What it is                                                               | Missing?                        |
+| :--------------------------------------- | :-------------------- | :----------------------------------------------------------------------- | :------------------------------ |
+| `Auth:DataProtectionKey`                 | `dotnet user-secrets` | signs the auth cookie; a fixed key stops sessions dying on every restart | sessions drop on restart        |
+| `Seed:AdminEmail` / `Seed:AdminPassword` | `dotnet user-secrets` | the seeded administrator                                                 | **fatal** — fail fast at startup |
+| `Ai:ApiKey` (§12.3)                      | `dotnet user-secrets` | the Gemini key the AI helper answers with                                | **not fatal** — the helper drops to `helper-intents.json`, and the choice is logged at startup |
+
+The third one is deliberately different in kind. An app that refuses to boot because an *optional
+enhancement* is unconfigured is a worse app, and this enhancement has an exact fallback: with no
+key the service graph does not even contain the AI path (`ServiceRegistration`), so unsetting the
+secret is a complete rollback with no deploy. Everything else about the helper — model, token cap,
+timeout, question-length cap, rate limits — is non-secret and lives in `appsettings.json` under
+`Ai`.
 
 ```bash
 dotnet user-secrets set "Seed:AdminPassword" "<choose one>" --project server/TeachersLessons.Api
@@ -598,6 +690,121 @@ A broken database at 09:00 on demo day is then a thirty-second fix, not an impro
 ### README — in the order a stranger needs it
 
 `restore → user-secrets → ef database update → seed --demo → run API → npm ci → npm start`, with the two URLs and the demo credentials. Verified by doing it from a clean clone once, on Day 19.
+
+---
+
+## 12. Extensions — three features built after the requirements passed
+
+Everything in §1–§11 was planned before a line was written. This section is the opposite: three features designed **after** the twenty-three requirements were green, each with a full plan file of its own. They share one rule, which is why they are grouped rather than appended separately:
+
+> **Nothing here may weaken a guarantee already made.** Every one of them adds a read path, and every one of them goes through the same door the original feature used — `LessonQueries.VisibleTo` for lessons, `CurrentUser.UserId` for identity, a separate DTO for anything anonymous. A feature that needed a second door was redesigned until it did not.
+
+| §    | Feature                            | Plan                         | Data model      | The guarantee it must not break                             |
+| :--- | :--------------------------------- | :--------------------------- | :-------------- | :----------------------------------------------------------- |
+| 12.1 | Profile photos                     | [`media.md`](media.md)       | `Avatars` table | the bytes served are always ours; a photo is never a file path |
+| 12.2 | Public directory + student profile | [`discover.md`](discover.md) | none            | an anonymous row carries aggregates, never a person          |
+| 12.3 | The AI helper                      | [`ai.md`](ai.md)             | none            | the model is shown only what the student's own screens show  |
+| 12.4 | Resetting your own password        | this section                 | none            | the account is taken from the cookie, never from the request |
+
+### 12.1 Profile photos — bytes in the database, on purpose
+
+**One decision:** a photo is a row in `Avatars` (§3), stored as a `byte[]`, served by the API.
+
+Not S3/R2/GCS — a second vendor, a second secret and a signed-URL story for a 200 KB square, on a project whose entire database is one SQLite file. Not a folder on disk either: the deployed API has exactly one writable volume, and putting user-supplied bytes in the same filesystem as the executable is a category of bug (path traversal, stale files after a restore) this app has no reason to accept. In the database, a photo is covered by the same backup, the same transaction and the same delete cascade as the person it belongs to.
+
+**The upload is never the thing that is stored.** `AvatarImageProcessor` runs three steps in order, and the order is the security property:
+
+1. **Header only, first.** `Image.Identify` reads dimensions without decoding pixels. A file that is not a raster image is a 400 here — before anything expensive — and a declared dimension over 8000px is refused as a decompression bomb rather than discovered as an OOM.
+2. **Re-encode, always.** Auto-orient (EXIF), centre-crop to 256×256 with Lanczos3, encode WebP at q80, retry at q60 if it lands over 200 KB. The output is produced by _our_ encoder, so the bytes in the response are bytes we wrote — a payload disguised as a JPEG does not survive a round trip through a decoder and an encoder.
+3. **Store what we made, not what we were told.** `ContentType` is written as `image/webp` literally; the upload's own header is used only to reject obviously wrong types up front.
+
+Served with `X-Content-Type-Options: nosniff`, an `ETag` and a 5-minute `max-age`; a repeat visit sends `If-None-Match` and gets a **304**. `PUT` is 5 MB-capped twice — `[RequestSizeLimit]` behind Kestrel, plus an explicit `Content-Length` check so the **413** is deterministic across hosts (without it the multipart binder simply drops the oversized part and hands the action a null file).
+
+**The client contract is one nullable string.** Every DTO showing a person carries `photoETag`; `AvatarComponent` turns non-null into an `<img>` and null into an initials tile. No payload anywhere carries image bytes, and no screen has to ask "does this person have a photo" separately. The ETag doubles as the cache-buster: a new photo is a new ETag is a new URL.
+
+### 12.2 The public directory, and a student row that opens a profile
+
+Two halves of one idea: **there was nothing to look at before signing in, and a teacher's student list was a dead end.**
+
+**Part A — `/teachers`, the first anonymous _per-row_ read path.** `/api/public/home` only ever returned two totals, so nothing it sent could be traced to a person. The directory sends rows, and that is a different problem. Three rules hold it:
+
+- **A separate DTO, never a reused one.** `PublicTeacherDto` exists so that a field added later to the admin screen's `TeacherSummaryDto` — which already carries `Email` — cannot arrive on an anonymous page by accident. Suite F asserts on the **raw body** that neither an email nor a join code appears.
+- **Approved teachers only.** Pending and rejected are not a public record; a rejection certainly is not.
+- **Every number is an aggregate over the teacher's own course** — open lessons, published lessons, students, marks, passes. None can be traced to one student. The open-lesson count uses the same predicate as `LessonQueries.VisibleTo`, so it cannot drift from what a student sees inside the course. Pass _rate_ is deliberately not computed server-side: a course with no marks has no pass rate, and rendering "—" is the client's decision, not a number the server should invent.
+
+Ordered by **open lessons descending, then name**, so a newly approved teacher with nothing to show lands at the bottom and the first screen of the directory is never empty. `?q=` filters on name.
+
+**The photo problem, and why a second photo route.** The directory is read with no session, and `GET /api/users/{id}/photo` is `[Authorize]` — it answers those readers 401. Opening that route to every id would make _holding an id_ a permission, and §3 chose UUIDv7 precisely so an id would carry no authority. So there is a second action, `GET /api/public/teachers/{id}/photo`, whose authorisation is a question asked **in SQL** — "is this an approved teacher?" — rather than a claim. A teacher who is not approved and a teacher with no photo answer **identically (404)**, so nothing there tells a caller whether a given id is a person at all. The two routes differ in exactly one header: `public, max-age=300` for a directory photo, `private` for anyone else's.
+
+**Part B — the student row becomes a link.** `GET /api/teacher/students/{studentId}` was already a list of marks; it becomes a profile — details, photo, joined-at, counts, then marks in lesson order. Three isolation rules hold, and suite D is what keeps them holding:
+
+- a student the caller never enrolled is a **404, not a 403** — no existence oracle;
+- the marks are filtered by **the caller's own lessons**, so a student on two courses shows each teacher only their own;
+- `TotalLessons` counts **the caller's** lessons only, so the denominator cannot leak the size of another teacher's course.
+
+### 12.3 The AI helper — the model answers, the server decides what it may know
+
+This is the one extension that contradicts the brief. [`project.md`](project.md) says _"the helper is not an AI: it is a list of phrases you write"_. That line is a **scope fence**, not an architecture requirement — it existed so Req 18 could not balloon into a chatbot project. The fence is removed; **the phrase list stays wired in underneath**, so with no key configured the app behaves exactly as it did, byte for byte, and Req 18 still passes on its own terms.
+
+**The shape.** `AiHelperService` is a **decorator** over the original `HelperService`, not a replacement. `ServiceRegistration` decides once, at startup, which implementation is registered as `IHelperService`: with a usable key the graph is `AiHelperService → HelperService`, and without one it is `HelperService` alone. **The wire contract does not move** — same route, same `HelperAnswerResponse`, no change to the Angular widget's model, no migration, no new table.
+
+**The context pack is the whole security story.** Before the call the server builds a small JSON snapshot of the asking student's world and sends _that_ — the model is never given a tool, a connection or a query. Everything in the pack comes from a query the student could have run themselves: lessons through `LessonQueries.VisibleTo`, marks from their own `Marks` rows, courses from their own `Enrollments`, "new since last visit" from the same service behind `/student/whats-new`. Three things are deliberately **absent**, and adding any of them back is a security change rather than a tidy-up:
+
+- **every URL** — the model answers _where to look_, never _here is the link_, so a successful prompt injection has nothing to exfiltrate;
+- **every future moment** — an unopened quiz arrives as `false`, never as a date, because a guessed date is worse than no date;
+- **every id but the teacher's**, which the deep route needs.
+
+A lesson the teacher has not opened is not in the pack at all — it is absent from `VisibleTo`, so the model cannot leak a title it was never shown. _`VisibleTo` is the only door, and there is deliberately no second one._
+
+**The model can suggest; it cannot decide.** Its reply is a structured JSON object (`{answer, route, unknown}`) requested through a response schema, and the `route` is then **validated against this student's own screens** — a static allow-list, plus a course route accepted only when the guid is one of the teachers in this student's own pack, checked against the pack rather than against a regex. A hallucinated, foreign or off-app route becomes `null`: the answer still shows, the "Take me there" button simply does not. `HelperService`'s no-courses rule is then applied to the model's answer exactly as it is applied to the phrase list's — one rule, one place.
+
+**Degradation is the feature.** The route's entire promise is that it never fails. Every one of these lands on the same line — _`HelperService` answers_ — with a **200**:
+
+| What happened                                                                   | What the student gets                                                                                               |
+| :------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------ |
+| No key configured                                                               | the phrase list                                                                                                     |
+| Over the per-student rate limit                                                 | the phrase list — deliberately **not a 429**: a helper that stops helping is worse than one that answers from a list |
+| The model threw, or the SDK threw something undocumented                        | the phrase list, warning logged                                                                                     |
+| The call took longer than `Ai:TimeoutSeconds`                                   | the phrase list — the timeout guards the **seam**, so it holds whatever is behind it                                |
+| The reply did not finish cleanly (safety block, token cut-off, empty candidate) | the phrase list                                                                                                     |
+| The reply was not parseable JSON                                                | the phrase list — a schema is a _request_, not a guarantee                                                          |
+| The model said `unknown`, or answered empty                                     | the phrase list, including its "here's what I do know" list                                                         |
+
+The one thing that is **not** degraded is the caller going away: a cancelled request rethrows rather than spending a fallback nobody is waiting for.
+
+**Cost, and what the limiter is actually for.** `gemini-3.5-flash-lite` with thinking off, measured at ~687 tokens a question — roughly **two hundredths of a cent**. The per-student sliding window (6/minute, 60/day, in memory) is therefore an **abuse guard, not a cost guard**: it is there so one bored student with a loop cannot make the app noisy, and so the free tier's per-minute quota is never what fails. In-memory is correct here and stays correct — §11 and the README both state the API is a single instance by necessity, because a Fly volume attaches to one machine and SQLite cannot be shared. A distributed counter would be infrastructure for a topology this app cannot have.
+
+**Content, not code.** `helper-system-prompt.md` sits beside `helper-intents.json` and is read once at startup, for the same reason: whoever tunes the helper's voice should not be writing a C# diff.
+
+**What would make this a mistake.** If the pack ever starts carrying a URL, a future date, or a field that did not come through `VisibleTo`; if the route allow-list becomes a regex; or if a failure path starts answering 5xx instead of the phrase list. Each of those has a test in suite G, and each of those tests exists because it is the thing that would quietly stop being true.
+
+### 12.4 Resetting your own password — the one reset that needs no email
+
+**The brief bundled two things under one cause.** [`project.md`](project.md) says _"there is no password reset, and no notification leaves the app — **both need email**"_. Only one of them does. Proving identity to somebody who **cannot sign in** needs a message sent to an address they control; that is the *forgotten*-password case, and it still does not exist here. But somebody who **is** signed in has already proved who they are, twice over — they hold the session cookie, and they can type the password the account currently has. Nothing needs to be sent anywhere for that.
+
+So this is the half that was built, and the naming is deliberate: **`PUT /api/me/password`**, not `/api/auth/forgot`. It is a property of *me*, changed by *me*.
+
+**No user id crosses the wire.** The account is read from `ICurrentUser.UserId`, which comes from the cookie's `NameIdentifier` claim. There is no id in the route and no id in the body, so there is nothing to tamper with — the endpoint cannot be aimed at another account no matter what is posted to it. This is the same rule §5 states for every authenticated route, and it is worth restating here because a password endpoint is the one where getting it wrong is worst.
+
+**Two checks the validator deliberately does not do.** `ChangePasswordRequestValidator` answers questions about the *shape* of the request — is a current password present, does the new one meet the policy. The two questions that need the stored hash are answered in `AccountService`, which is the only place allowed to touch it:
+
+1. **Does the current password verify?** If not, `400` named on `currentPassword`. Unlike sign-in, being specific costs nothing: the caller already holds this session.
+2. **Is the new password the one already in use?** If it verifies against the stored hash, `400` named on `newPassword`. Not a history — one comparison, against the only hash there is. A password *history* would mean storing old hashes, which is more retained credential material to protect for a benefit this app does not need.
+
+**One policy, reused rather than restated.** The validator calls the same `RegistrationRules.Password()` extension registration calls, and the client reuses the same `PASSWORD_RULE` string it shows on the sign-up screens. The rule a person reads before they break it and the rule they are told they broke are one string, in one place, for both screens.
+
+**Who gets the screen.** All three roles, through one shared `PasswordCardComponent` on `/student/profile`, `/teacher/profile` and the new `/admin/profile`. The administrator is the reason `/admin/profile` exists at all: the admin account's first password is seeded from `Seed:AdminPassword`, so it also lives in a config file, a deploy script and somebody's shell history. `DbSeeder` only ever *inserts* — it never rewrites an existing row — so a password changed in the app is the password from then on, and the seeded one can stop being a live credential.
+
+**What this does not do, stated plainly.** Changing a password does **not** sign out that person's other sessions. The cookie carries id, email and role and is validated by its own signature; there is no server-side session record to revoke and no security stamp on `User` to invalidate against. Nothing here pretends otherwise. The fix is the same one Appendix A already describes for a different reason — a stored, revocable token — and it is the same single change that would close both.
+
+| Failure                                      | Status | Where the message lands  |
+| :------------------------------------------- | :----- | :----------------------- |
+| Not signed in                                | `401`  | — |
+| No `X-XSRF-TOKEN` header                     | `400`  | banner — the same middleware every other write goes through |
+| Current password wrong                       | `400`  | under **Current password** |
+| New password breaks the policy               | `400`  | under **New password**, in registration's own words |
+| New password is the one already in use       | `400`  | under **New password** |
+| New and confirm differ                       | —      | under **Confirm new password**, client-side, never sent |
 
 ---
 

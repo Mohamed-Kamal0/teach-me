@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { BusyRingComponent } from './busy-ring.component';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { ProblemDetails } from '../core/models';
@@ -9,11 +9,11 @@ import { ProblemDetails } from '../core/models';
 @Component({
   selector: 'app-state-panel',
   standalone: true,
-  imports: [MatProgressSpinnerModule, MatButtonModule, MatIconModule],
+  imports: [BusyRingComponent, MatButtonModule, MatIconModule],
   template: `
     @if (loading) {
       <div class="state state-loading" role="status" aria-live="polite">
-        <mat-spinner diameter="32"></mat-spinner>
+        <app-busy-ring size="32px" width="3px" class="state__ring"></app-busy-ring>
         <p>Loading…</p>
       </div>
     } @else if (error) {
@@ -66,6 +66,9 @@ import { ProblemDetails } from '../core/models';
     .state__title { margin: 0; max-width: 34rem; font-size: var(--step-1); color: var(--ink); }
     .state-error .state__title { color: var(--danger); }
     .state__detail { margin: 0; max-width: 34rem; }
+    /* The ring draws in currentColor, and the panel's text is deliberately muted — this
+       is the one thing in it that should carry the app's own colour. */
+    .state__ring { color: var(--primary); }
   `]
 })
 export class StatePanelComponent {

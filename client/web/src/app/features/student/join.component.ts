@@ -7,7 +7,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { BusyRingComponent } from '../../shared/busy-ring.component';
 import { applyServerErrors, fieldMessage, revealErrors } from '../../core/form-errors';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
 
@@ -16,7 +16,7 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
   standalone: true,
   imports: [
     RouterLink, ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatButtonModule,
-    MatCardModule, MatIconModule, MatProgressSpinnerModule
+    MatCardModule, MatIconModule, BusyRingComponent
   ],
   template: `
     <div class="form-page">
@@ -54,7 +54,7 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
               }
 
               <button mat-flat-button color="primary" type="submit" [disabled]="submitting()">
-                @if (submitting()) { <mat-spinner diameter="20"></mat-spinner> } @else { Join }
+                @if (submitting()) { <app-busy-ring size="20px"></app-busy-ring> } @else { Join }
               </button>
             </form>
           }

@@ -83,7 +83,7 @@ It is the reflex answer and it is wrong here, for three reasons:
 Retrieval solves "the corpus is too big for the prompt". This corpus is a few kilobytes per
 student and changes every time a teacher publishes. An index would need building, invalidating on
 every lesson write, and storing — a vector store next to a SQLite file whose selling point in
-[`README.md`](README.md) is that there is no engine to install. It would add a second source of
+[`README.md`](../README.md) is that there is no engine to install. It would add a second source of
 truth for visibility, which is exactly the thing this codebase refuses to have.
 
 ### Why not call the model from Angular
@@ -408,7 +408,7 @@ The API never returns 5xx for a helper question. `HelperController` is unchanged
 `Features/Helper/Services/HelperRateLimiter.cs` — an in-memory sliding window keyed by
 `currentUser.UserId`, registered as a singleton. Defaults: **6 per minute, 60 per day** per student.
 
-In-memory is correct here and will stay correct: [`README.md`](README.md) states the API is a single
+In-memory is correct here and will stay correct: [`README.md`](../README.md) states the API is a single
 instance by necessity, because a Fly volume attaches to one machine and SQLite cannot be shared. A
 distributed counter would be infrastructure for a topology this app cannot have. If that ever
 changes, this is one of the things that changes with it — noted here so it is found.
@@ -571,7 +571,7 @@ handling all continue to work unchanged, because the contract did not move.
 ## 13. Secret and deployment
 
 Get a key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey). Then, locally,
-alongside the two secrets already in [`README.md`](README.md) step 1:
+alongside the two secrets already in [`README.md`](../README.md) step 1:
 
 ```bash
 # from server/TeachersLessons.Api

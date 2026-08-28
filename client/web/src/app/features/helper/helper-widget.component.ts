@@ -7,7 +7,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { BusyRingComponent } from '../../shared/busy-ring.component';
 import { HelperAnswer } from '../../core/models';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
 
@@ -20,7 +20,7 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
     MatIconModule,
     MatFormFieldModule,
     MatInputModule,
-    MatProgressSpinnerModule,
+    BusyRingComponent,
   ],
   animations: [
     trigger('panelAnim', [
@@ -62,7 +62,7 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
         <div class="panel-body" aria-live="polite">
           @if (asking()) {
             <div class="thinking">
-              <mat-spinner diameter="20"></mat-spinner><span>Looking…</span>
+              <app-busy-ring size="20px"></app-busy-ring><span>Looking…</span>
             </div>
           } @else if (failure()) {
             <!-- A helper that answers "I don't know that one" when the API is down is lying about

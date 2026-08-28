@@ -44,12 +44,19 @@ import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
           </ng-container>
           <ng-container matColumnDef="title">
             <th mat-header-cell *matHeaderCellDef>Title</th>
-            <td mat-cell *matCellDef="let row" data-label="Title" class="cell-title">{{ row.title }}</td>
+            <td mat-cell *matCellDef="let row" data-label="Title" class="cell-title">
+              <a class="title-link" [routerLink]="['/teacher/lessons', row.id]">{{ row.title }}</a>
+            </td>
           </ng-container>
           <ng-container matColumnDef="moments">
             <th mat-header-cell *matHeaderCellDef>Moments</th>
             <td mat-cell *matCellDef="let row" data-label="Moments" class="cell-rail">
-              <app-release-rail [lesson]="row" [compact]="true"></app-release-rail>
+              <!-- The rail is the shortest description of a lesson on this page, so it is also the
+                   way into it. It holds no controls of its own, so an anchor may wrap it. -->
+              <a class="rail-link" [routerLink]="['/teacher/lessons', row.id]"
+                [attr.aria-label]="'Open ' + row.title">
+                <app-release-rail [lesson]="row" [compact]="true"></app-release-rail>
+              </a>
             </td>
           </ng-container>
           <ng-container matColumnDef="reorder">
@@ -74,7 +81,16 @@ import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
   `,
   styles: [`
     .cell-title { font-weight: 500; }
+    /* The lesson's own page is where a title goes, so the title carries the link rather than a
+       fourth button competing with Edit and Delete. */
+    .title-link { color: inherit; text-decoration: none; }
+    .title-link:hover, .title-link:focus-visible { text-decoration: underline; }
     .cell-rail { min-width: 20rem; padding-block: 0.75rem; }
+    .rail-link {
+      display: block; color: inherit; text-decoration: none;
+      border-radius: var(--radius-sm); padding: 0.25rem; margin: -0.25rem;
+    }
+    .rail-link:hover { background: var(--paper-sunk); }
     .danger-action { color: var(--danger); }
     @media (max-width: 720px) {
       .cell-rail { min-width: 0; display: block; text-align: left; }

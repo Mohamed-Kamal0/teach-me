@@ -6,7 +6,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { BusyRingComponent } from '../../shared/busy-ring.component';
 import { AuthService } from '../../core/auth.service';
 import { PASSWORD_RULE, applyServerErrors, fieldMessage, revealErrors } from '../../core/form-errors';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
@@ -22,7 +22,7 @@ function passwordsMatch(control: AbstractControl): ValidationErrors | null {
   standalone: true,
   imports: [
     ReactiveFormsModule, RouterLink, MatFormFieldModule, MatInputModule, MatButtonModule,
-    MatCardModule, MatIconModule, MatProgressSpinnerModule
+    MatCardModule, MatIconModule, BusyRingComponent
   ],
   template: `
     <div class="form-page">
@@ -44,14 +44,28 @@ function passwordsMatch(control: AbstractControl): ValidationErrors | null {
 
             <mat-form-field appearance="outline">
               <mat-label>Password</mat-label>
-              <input matInput type="password" formControlName="password" autocomplete="new-password" />
+              <input matInput [type]="reveal() ? 'text' : 'password'" formControlName="password"
+                autocomplete="new-password" />
+              <button mat-icon-button matSuffix type="button" tabindex="-1"
+                (click)="reveal.set(!reveal())"
+                [attr.aria-label]="reveal() ? 'Hide password' : 'Show password'"
+                [attr.aria-pressed]="reveal()">
+                <mat-icon>{{ reveal() ? 'visibility_off' : 'visibility' }}</mat-icon>
+              </button>
               <mat-hint>{{ passwordRule }}</mat-hint>
               @if (message('password', 'Password'); as msg) { <mat-error>{{ msg }}</mat-error> }
             </mat-form-field>
 
             <mat-form-field appearance="outline">
               <mat-label>Confirm password</mat-label>
-              <input matInput type="password" formControlName="confirmPassword" autocomplete="new-password" />
+              <input matInput [type]="reveal() ? 'text' : 'password'" formControlName="confirmPassword"
+                autocomplete="new-password" />
+              <button mat-icon-button matSuffix type="button" tabindex="-1"
+                (click)="reveal.set(!reveal())"
+                [attr.aria-label]="reveal() ? 'Hide password' : 'Show password'"
+                [attr.aria-pressed]="reveal()">
+                <mat-icon>{{ reveal() ? 'visibility_off' : 'visibility' }}</mat-icon>
+              </button>
               @if (mismatch()) { <mat-error>Those passwords don't match.</mat-error> }
             </mat-form-field>
 
@@ -63,7 +77,7 @@ function passwordsMatch(control: AbstractControl): ValidationErrors | null {
             }
 
             <button mat-flat-button color="primary" type="submit" [disabled]="submitting()">
-              @if (submitting()) { <mat-spinner diameter="20"></mat-spinner> } @else { Register }
+              @if (submitting()) { <app-busy-ring size="20px"></app-busy-ring> } @else { Register }
             </button>
           </form>
         </mat-card-content>
@@ -87,6 +101,10 @@ function passwordsMatch(control: AbstractControl): ValidationErrors | null {
 })
 export class RegisterStudentComponent {
   readonly passwordRule = PASSWORD_RULE;
+
+  /** One toggle for both boxes — they are meant to be compared, so revealing one and not the
+   *  other would hide exactly the difference a person is checking for. */
+  readonly reveal = signal(false);
 
   submitting = signal(false);
   banner = signal<string | null>(null);

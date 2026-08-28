@@ -4,8 +4,18 @@ An ASP.NET Core 10 + Angular 18 teaching platform. Teachers publish lessons — 
 optionally a handout, a quiz and its answers — each released on its own schedule. Students join a
 teacher's course with a joining code and see only what is open to them, now. A public directory
 at `/teachers` lists every approved teacher and their own course's numbers, signed in or not.
+Anyone signed in can set a profile photo and reset their own password, and a student can ask an
+in-app helper — backed by a model that is shown only that student's own data — where to find things.
 
-The brief is [`project.md`](project.md); the design and schedule behind it is [`plan.md`](plan.md).
+| Document                          | What it is                                                                       |
+| :-------------------------------- | :--------------------------------------------------------------------------------- |
+| [`project.md`](docs/project.md)        | the brief, as given, plus an addendum recording what was built beyond it           |
+| [`plan.md`](docs/plan.md)              | the design — data model, endpoints, validation, tests, and §12 for the extensions  |
+| **[`FEATURES.md`](docs/FEATURES.md)**  | **every feature explained end to end** — the screen, the request, the rule, the failure |
+| [`DEPLOY.md`](docs/DEPLOY.md)          | the deployment runbook                                                             |
+| [`media.md`](docs/media.md) · [`discover.md`](docs/discover.md) · [`ai.md`](docs/ai.md) | the plan behind each of the three later features |
+
+Everything except this file lives in [`docs/`](docs/); the root stays readable.
 
 ---
 
@@ -49,7 +59,7 @@ dotnet user-secrets set "Ai:ApiKey" "AIza..."
 ```
 
 Everything else lives in `appsettings.json` under `Ai` — model, token cap, timeout, question-length
-cap and the per-student rate limit. See [`ai.md`](ai.md) for why the model is only ever shown data
+cap and the per-student rate limit. See [`ai.md`](docs/ai.md) for why the model is only ever shown data
 the student's own screens would already return.
 
 ### 2. Create the database and load the demo data
@@ -102,11 +112,17 @@ The seeded lessons have **deliberately staggered moments**: one fully open, one 
 tomorrow, one whose answers are already released, and one not open at all. That is what makes the
 timing requirement demonstrable without touching the database by hand.
 
+> **On the administrator's password.** `Seed:AdminPassword` is only ever used to *create* the admin
+> row — `DbSeeder` never rewrites one that already exists. So the seeded value can stop being a live
+> credential: sign in as the administrator, open **Profile** from the account menu, and change it.
+> The new password is the one from then on, across restarts and redeploys, and the secret goes back
+> to being what it actually is — a bootstrap value, not a standing password.
+
 ---
 
 ## Deployment
 
-**[DEPLOY.md](DEPLOY.md) is the step-by-step runbook.** What follows is why it is built this way.
+**[DEPLOY.md](docs/DEPLOY.md) is the step-by-step runbook.** What follows is why it is built this way.
 
 Two services, one behind the other:
 
@@ -120,7 +136,7 @@ Fly apart from the free tiers is the **volume**: the SQLite database is a persis
 survives restarts and redeploys. Every free option has an ephemeral filesystem, which for a SQLite
 app means the database resets on every boot. Fly is not free — expect $0.15–$3 a month depending on
 traffic. Free alternatives (ngrok tunnel, Render, Cloud Run) are kept and documented in
-[DEPLOY.md](DEPLOY.md).
+[DEPLOY.md](docs/DEPLOY.md).
 
 **Why a rewrite and not CORS.** Every API call in the client is a hardcoded relative path —
 there is no `environment.ts` and no API base URL. So the SPA has to be served from an origin
@@ -145,7 +161,7 @@ machines would mean two divergent databases behind one URL. `min_machines_runnin
 
 **`Seed__Demo` must stay unset on Fly.** It drops and re-seeds the database on every start — right
 for a host with no disk, actively destructive here. Seeding is instead a one-time step: set the
-secret, let it boot, unset it (see [DEPLOY.md](DEPLOY.md)).
+secret, let it boot, unset it (see [DEPLOY.md](docs/DEPLOY.md)).
 
 **`core/interceptors/ngrok.interceptor.ts`** is a leftover from the tunnel setup documented as an
 alternative. It adds a header Fly ignores, so it is harmless; delete it if you want the client
@@ -177,6 +193,7 @@ Fifty-two tests across the suites that a click-through cannot give you confidenc
 | **B** — `MarkConstraintTests`     | No second mark for the same student on the same lesson (409); the score bound is read **from the lesson**; `passed` sent by a client is ignored           |
 | **C** — `TimingEnforcementTests`  | An unopened quiz has **no `quizUrl` key in the raw JSON** — asserted on the response string, because a missing key and a null key deserialise identically |
 | **D** — `OwnershipIsolationTests` | A teacher cannot reach another teacher's lesson (404); a student cannot read a course they never joined (**403**, not an empty list); a student profile shows the calling teacher's marks and lesson count only |
+| **E** — `AvatarImageProcessorTests` · `AvatarEndpointTests` | Whatever is uploaded comes back out as a **256×256 WebP produced by our own encoder** — a non-image is a 400 rather than an exception, an implausible declared dimension is refused before the decode, an upload over 5 MB is a **413**, a repeat fetch with `If-None-Match` is a **304**, and deleting a photo returns the initials tile |
 | **F** — `PublicDirectoryTests`    | The anonymous directory answers without a session, lists **approved teachers only**, and its raw body carries neither an email nor a join code; a teacher photo is public only while that teacher is approved |
 | **G** — `AiHelperTests`           | The AI helper's context pack **excludes an unopened lesson and carries no URL at all** — asserted on the serialised pack, in suite C's style; one student's pack never mentions another; and every failure path (no key, a model that throws, times out, returns unparseable JSON, invents a route, or is rate-limited) answers **200 with the phrase-list answer**, never a 5xx |
 
@@ -239,22 +256,40 @@ lesson read goes through.
 
 ```
 server/TeachersLessons.Api/
-  Domain/       entities and enums, Guid (UUIDv7) keys
+  Domain/       entities and enums, Guid (UUIDv7) keys — including Avatar, the photo row
   Data/         AppDbContext, per-entity configurations, DbSeeder, DemoSeeder
   Features/     Auth · Admin · Teacher · Student · Public · Helper — controller + DTOs + validators
-  Common/       CurrentUser, policies, antiforgery, ProblemDetails middleware, VisibleTo projection
+                + services; the Helper folder holds both answer paths and the seam between them
+  Common/       CurrentUser, policies, antiforgery, ProblemDetails middleware, VisibleTo projection,
+                AvatarImageProcessor, ServiceRegistration (which answer path is wired, decided once)
   Migrations/
   helper-intents.json       the Req 18 phrase list — content, not code, and the helper's floor
   helper-system-prompt.md   the AI helper's instructions — content too, for the same reason
 server/TeachersLessons.Api.Tests/    the suites above
 client/web/src/app/
   core/         auth service, interceptors, guards, models
-  shared/       StatePanelComponent (loading | error | empty), MediaEmbedComponent, dialogs
-  features/     one folder per area, mirroring the API
+  shared/       StatePanelComponent (loading | error | empty), MediaEmbedComponent,
+                AvatarComponent, IdentityCardComponent, PasswordCardComponent, BusyRingComponent,
+                ReleaseRailComponent, dialogs
+  features/     one folder per area, mirroring the API — plus public/ for the directory
   styles/       _theme.scss — the palette, with its measured contrast ratios
+docs/           every document except this one — the brief, the plan, the feature walk-through,
+                the runbook, and the plan behind each later feature
 ```
 
-### A note on two implementation details
+### A note on three implementation details
+
+**Profile photos live in the database, and the bytes served are always ours.** A photo is a row in
+`Avatars` keyed by `UserId`, not a file on disk and not an object in a bucket: the deployed API has
+exactly one writable volume, and a photo in the database is covered by the same backup, transaction
+and delete cascade as the person it belongs to. `Common/AvatarImageProcessor.cs` reads the header
+first (`Image.Identify`, so a non-image is a 400 before anything is decoded and an implausible
+declared dimension is refused as a decompression bomb), then **re-encodes every accepted upload** to
+a 256×256 WebP. The stored `ContentType` is written literally, never copied from the upload. On the
+wire no payload ever carries image bytes — every DTO that shows a person carries `photoETag`, a
+`string?`, where non-null means "fetch it at `/api/users/{id}/photo`, and this is its version" and
+null means "draw the initials tile". That one string is also the cache-buster.
+
 
 **Dates are stored as UTC `DateTime`, not `DateTimeOffset`.** EF Core's SQLite provider only
 translates equality on `DateTimeOffset` — not `<`/`<=` — and the entire timing story depends on those

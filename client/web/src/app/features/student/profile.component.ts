@@ -8,9 +8,10 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { BusyRingComponent } from '../../shared/busy-ring.component';
 import { StatePanelComponent } from '../../shared/state-panel.component';
-import { PhotoCardComponent } from '../../shared/photo-card.component';
+import { IdentityCardComponent } from '../../shared/identity-card.component';
+import { PasswordCardComponent } from '../../shared/password-card.component';
 import { Profile, ProblemDetails } from '../../core/models';
 import { applyServerErrors, fieldMessage, revealErrors } from '../../core/form-errors';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
@@ -21,8 +22,8 @@ import { NotifyService } from '../../core/notify.service';
   standalone: true,
   imports: [
     DatePipe, RouterLink, ReactiveFormsModule, MatFormFieldModule, MatInputModule,
-    MatButtonModule, MatCardModule, MatIconModule, MatProgressSpinnerModule, StatePanelComponent,
-    PhotoCardComponent
+    MatButtonModule, MatCardModule, MatIconModule, BusyRingComponent, StatePanelComponent,
+    IdentityCardComponent, PasswordCardComponent
   ],
   template: `
     <div class="page-head">
@@ -34,83 +35,92 @@ import { NotifyService } from '../../core/notify.service';
 
     <app-state-panel [loading]="loading()" [error]="error()" (retry)="load()">
       @if (profile(); as p) {
-        <div class="grid">
-          <div class="col">
-            <app-photo-card></app-photo-card>
+        <div class="stack">
+          <app-identity-card>
+            @if (p.courses.length > 0) {
+              <p class="text-muted identity__note">
+                On {{ p.courses.length }} {{ p.courses.length === 1 ? 'course' : 'courses' }}.
+              </p>
+            }
+          </app-identity-card>
 
-            <mat-card>
-              <mat-card-header><mat-card-title>Your courses</mat-card-title></mat-card-header>
-              <mat-card-content>
-                @if (p.courses.length === 0) {
-                  <p class="text-muted">You're not on any course yet.</p>
-                  <a mat-stroked-button routerLink="/student/join"><mat-icon>key</mat-icon> Enter a joining code</a>
-                } @else {
-                  <ul class="course-list">
-                    @for (c of p.courses; track c.teacherUserId) {
-                      <li class="course-list__item">
-                        <a mat-stroked-button [routerLink]="['/student/courses', c.teacherUserId]">
-                          <mat-icon>school</mat-icon> {{ c.teacherFullName }}
-                        </a>
-                        <span class="text-muted">joined {{ c.joinedAtUtc | date: 'mediumDate' }}</span>
-                      </li>
+          <div class="grid">
+            <div class="col">
+              <mat-card>
+                <mat-card-header><mat-card-title>Your details</mat-card-title></mat-card-header>
+                <mat-card-content>
+                  <form [formGroup]="form" (ngSubmit)="save()" novalidate>
+                    <mat-form-field appearance="outline">
+                      <mat-label>Display name (optional)</mat-label>
+                      <input matInput formControlName="displayName" />
+                      <mat-hint>What your teachers see instead of your full name.</mat-hint>
+                      @if (message('displayName', 'Display name'); as msg) { <mat-error>{{ msg }}</mat-error> }
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline">
+                      <mat-label>Phone (optional)</mat-label>
+                      <input matInput formControlName="phone" inputmode="tel" autocomplete="tel" />
+                      @if (message('phone', 'Phone'); as msg) { <mat-error>{{ msg }}</mat-error> }
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline">
+                      <mat-label>Bio (optional)</mat-label>
+                      <textarea matInput formControlName="bio" rows="3"></textarea>
+                      <mat-hint>{{ bioLength() }} / 500</mat-hint>
+                      @if (message('bio', 'Bio'); as msg) { <mat-error>{{ msg }}</mat-error> }
+                    </mat-form-field>
+
+                    @if (banner()) {
+                      <p class="notice notice--danger" role="alert">
+                        <mat-icon>error_outline</mat-icon>
+                        <span>{{ banner() }}</span>
+                      </p>
                     }
-                  </ul>
-                }
-              </mat-card-content>
-            </mat-card>
+
+                    <button mat-flat-button color="primary" type="submit" [disabled]="saving()">
+                      @if (saving()) { <app-busy-ring size="20px"></app-busy-ring> } @else { Save changes }
+                    </button>
+                  </form>
+                </mat-card-content>
+              </mat-card>
+
+              <mat-card>
+                <mat-card-header><mat-card-title>Your courses</mat-card-title></mat-card-header>
+                <mat-card-content>
+                  @if (p.courses.length === 0) {
+                    <p class="text-muted">You're not on any course yet.</p>
+                    <a mat-stroked-button routerLink="/student/join"><mat-icon>key</mat-icon> Enter a joining code</a>
+                  } @else {
+                    <ul class="course-list">
+                      @for (c of p.courses; track c.teacherUserId) {
+                        <li class="course-list__item">
+                          <a mat-stroked-button [routerLink]="['/student/courses', c.teacherUserId]">
+                            <mat-icon>school</mat-icon> {{ c.teacherFullName }}
+                          </a>
+                          <span class="text-muted">joined {{ c.joinedAtUtc | date: 'mediumDate' }}</span>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </mat-card-content>
+              </mat-card>
+            </div>
+
+            <div class="col">
+              <app-password-card></app-password-card>
+            </div>
           </div>
-
-          <mat-card>
-            <mat-card-header><mat-card-title>Account</mat-card-title></mat-card-header>
-            <mat-card-content>
-              <p class="identity">{{ p.fullName }}</p>
-              <p class="text-muted identity__email">{{ p.email }}</p>
-
-              <form [formGroup]="form" (ngSubmit)="save()" novalidate>
-                <mat-form-field appearance="outline">
-                  <mat-label>Display name (optional)</mat-label>
-                  <input matInput formControlName="displayName" />
-                  <mat-hint>What your teachers see instead of your full name.</mat-hint>
-                  @if (message('displayName', 'Display name'); as msg) { <mat-error>{{ msg }}</mat-error> }
-                </mat-form-field>
-
-                <mat-form-field appearance="outline">
-                  <mat-label>Phone (optional)</mat-label>
-                  <input matInput formControlName="phone" inputmode="tel" autocomplete="tel" />
-                  @if (message('phone', 'Phone'); as msg) { <mat-error>{{ msg }}</mat-error> }
-                </mat-form-field>
-
-                <mat-form-field appearance="outline">
-                  <mat-label>Bio (optional)</mat-label>
-                  <textarea matInput formControlName="bio" rows="3"></textarea>
-                  <mat-hint>{{ bioLength() }} / 500</mat-hint>
-                  @if (message('bio', 'Bio'); as msg) { <mat-error>{{ msg }}</mat-error> }
-                </mat-form-field>
-
-                @if (banner()) {
-                  <p class="notice notice--danger" role="alert">
-                    <mat-icon>error_outline</mat-icon>
-                    <span>{{ banner() }}</span>
-                  </p>
-                }
-
-                <button mat-flat-button color="primary" type="submit" [disabled]="saving()">
-                  @if (saving()) { <mat-spinner diameter="20"></mat-spinner> } @else { Save changes }
-                </button>
-              </form>
-            </mat-card-content>
-          </mat-card>
         </div>
       }
     </app-state-panel>
   `,
   styles: [`
+    .stack { display: flex; flex-direction: column; gap: 1rem; }
     .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
     .col { display: flex; flex-direction: column; gap: 1rem; }
     @media (max-width: 800px) { .grid { grid-template-columns: minmax(0, 1fr); } }
-    .identity { margin: 0; font-family: 'Lora', Georgia, serif; font-size: var(--step-1); font-weight: 600; }
-    .identity__email { margin: 0 0 0.5rem; font-size: var(--step--1); word-break: break-all; }
-    form { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.75rem; }
+    .identity__note { margin: 0.35rem 0 0; font-size: var(--step--1); }
+    form { display: flex; flex-direction: column; gap: 0.5rem; }
     form button[type="submit"] { align-self: flex-start; margin-top: 0.25rem; }
     .course-list { list-style: none; padding: 0; margin: 0; }
     .course-list__item {
