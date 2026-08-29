@@ -166,6 +166,12 @@
               <mat-icon>more_vert</mat-icon>
             </button>
             <mat-menu #outMenu="matMenu">
+              <!-- Home leads this menu because signed out the bar's own Home link is hidden at
+                   this width, and the menu is then the only way back to it. -->
+              <a mat-menu-item routerLink="/">
+                <mat-icon>school</mat-icon>
+                <span>Home</span>
+              </a>
               @for (link of links(); track link.path) {
                 <a mat-menu-item [routerLink]="link.path">
                   <mat-icon>{{ link.icon }}</mat-icon>
