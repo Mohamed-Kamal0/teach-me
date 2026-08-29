@@ -15,6 +15,9 @@ export interface MeResponse {
   /** How to reach a teacher off the platform. Null for everyone else, and for a teacher who
    *  registered before the field existed. */
   phone: string | null;
+  /** The name a student chose for themselves on their profile. Null for everyone else, and for
+   *  a student who has not chosen one — read it through `AuthService.name`, never on its own. */
+  displayName: string | null;
 }
 
 export interface LoginResponse {

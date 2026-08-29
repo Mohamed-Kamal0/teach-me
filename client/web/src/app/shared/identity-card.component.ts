@@ -40,13 +40,15 @@ const MAX_EDGE = 1024;
           <img class="identity__preview" [src]="url" alt="Photo to be uploaded" width="96" height="96" />
         } @else {
           @if (auth.me(); as me) {
-            <app-avatar size="lg" [userId]="me.userId" [name]="me.fullName" [photoETag]="me.photoETag"></app-avatar>
+            <app-avatar size="lg" [userId]="me.userId" [name]="auth.name()" [photoETag]="me.photoETag"></app-avatar>
           }
         }
 
         <div class="identity__text">
           @if (auth.me(); as me) {
-            <p class="identity__name">{{ me.fullName }}</p>
+            <!-- What they call themselves, not what they registered as: a student who set a
+                 display name is addressed by it everywhere the app names them. -->
+            <p class="identity__name">{{ auth.name() }}</p>
             <p class="text-muted identity__email">{{ me.email }}</p>
           }
           <!-- Whatever the page wants said about this person: a role, a join date, a status. -->

@@ -25,10 +25,14 @@ public class StudentContextPackBuilder(
         var studentId = currentUser.UserId;
         var now = clock.GetUtcNow();
 
-        var name = await db.Users
-            .Where(u => u.Id == studentId)
-            .Select(u => u.FullName)
-            .FirstOrDefaultAsync(ct) ?? string.Empty;
+        // The name the student answers to: what they put on their profile, falling back to the
+        // one they registered under. The helper greets them by it, so reading the registration
+        // name alone made the answer address them by a name they had already replaced.
+        var names = await db.Students
+            .Where(s => s.UserId == studentId)
+            .Select(s => new { s.DisplayName, s.User.FullName })
+            .FirstOrDefaultAsync(ct);
+        var name = (string.IsNullOrWhiteSpace(names?.DisplayName) ? names?.FullName : names.DisplayName) ?? string.Empty;
 
         var enrollments = await db.Enrollments
             .Where(e => e.StudentUserId == studentId)

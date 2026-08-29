@@ -77,12 +77,15 @@ function formatIsoDate(value: Date | null): string | null {
             <!-- What the form below saved, read back from the server's answer. Filled-in facts
                  only: an empty row would be a label pointing at nothing. -->
             <dl class="facts">
-              @if (p.displayName) {
+              <!-- The band above now carries the display name, so repeating it here would say
+                   the same thing twice. What it no longer shows is the name on the account —
+                   worth stating, but only once it differs from the one being displayed. -->
+              @if (p.displayName && p.displayName !== p.fullName) {
                 <div class="facts__row">
                   <mat-icon class="facts__icon" aria-hidden="true">badge</mat-icon>
                   <div class="facts__pair">
-                    <dt>Known as</dt>
-                    <dd>{{ p.displayName }}</dd>
+                    <dt>Registered as</dt>
+                    <dd>{{ p.fullName }}</dd>
                   </div>
                 </div>
               }

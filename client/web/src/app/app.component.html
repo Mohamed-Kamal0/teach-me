@@ -11,12 +11,12 @@
           class="drawer__avatar"
           size="lg"
           [userId]="me.userId"
-          [name]="me.fullName"
+          [name]="auth.name()"
           [photoETag]="me.photoETag"
         ></app-avatar>
       }
       <span class="eyebrow">Signed in as</span>
-      <p class="drawer__name">{{ auth.me()?.fullName }}</p>
+      <p class="drawer__name">{{ auth.name() }}</p>
       <p class="drawer__email">{{ auth.me()?.email }}</p>
     </div>
     <nav class="drawer__nav" aria-label="Sections">
@@ -117,7 +117,7 @@
                 <app-avatar
                   size="sm"
                   [userId]="me.userId"
-                  [name]="me.fullName"
+                  [name]="auth.name()"
                   [photoETag]="me.photoETag"
                 ></app-avatar>
               } @else {
@@ -137,7 +137,7 @@
                     <app-avatar
                       size="sm"
                       [userId]="me.userId"
-                      [name]="me.fullName"
+                      [name]="auth.name()"
                       [photoETag]="me.photoETag"
                     ></app-avatar>
                   } @else {

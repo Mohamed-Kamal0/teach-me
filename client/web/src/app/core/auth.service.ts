@@ -14,6 +14,17 @@ export class AuthService {
   /** True when we could not reach the server at all — which is not the same as being signed out. */
   readonly serverUnreachable = this._serverUnreachable.asReadonly();
   readonly isAuthenticated = computed(() => this._me() !== null);
+  /**
+   * What to call the signed-in person anywhere the app addresses them: the display name they
+   * chose, or the name they registered under when they have not chosen one. Every bar, drawer,
+   * menu and avatar reads this rather than `fullName` — reading the registration name directly
+   * is what left the app bar showing the old name after a student renamed themselves.
+   */
+  readonly name = computed(() => {
+    const me = this._me();
+    if (!me) return '';
+    return me.displayName?.trim() || me.fullName;
+  });
   readonly role = computed<UserRole | null>(() => this._me()?.role ?? null);
 
   constructor(private http: HttpClient) {}

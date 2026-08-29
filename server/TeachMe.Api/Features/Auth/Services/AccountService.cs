@@ -43,7 +43,19 @@ public class AccountService(
             phone = teacher.Phone;
         }
 
-        return new MeResponse(user.Id, user.Email, user.FullName, user.Role.ToString(), teacherStatus, teacherDecidedAtUtc, photoETag, subject, phone);
+        // The name a student chose for themselves. Carried here for the same reason standing is:
+        // every bar, drawer and menu in the app names the signed-in person from the session, so a
+        // display name that lived only on /api/student/profile would leave all three showing the
+        // registration name after the student had renamed themselves.
+        string? displayName = null;
+        if (user.Role == UserRole.Student)
+        {
+            displayName = await db.Students.Where(s => s.UserId == user.Id)
+                .Select(s => s.DisplayName)
+                .FirstOrDefaultAsync(ct);
+        }
+
+        return new MeResponse(user.Id, user.Email, user.FullName, user.Role.ToString(), teacherStatus, teacherDecidedAtUtc, photoETag, subject, phone, displayName);
     }
 
     /// <summary>

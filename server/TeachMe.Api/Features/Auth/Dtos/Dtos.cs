@@ -27,6 +27,13 @@ public record UpdateTeacherProfileRequest(string Subject, string Phone);
 
 public record LoginResponse(string Role, string? TeacherStatus);
 
-public record MeResponse(Guid UserId, string Email, string FullName, string Role, string? TeacherStatus, DateTimeOffset? TeacherDecidedAtUtc, string? PhotoETag, string? Subject, string? Phone);
+/// <summary>
+/// Who is signed in. <c>DisplayName</c> is the name a student chose for themselves on their
+/// profile — null for everyone else, and null for a student who has not chosen one. It rides on
+/// identity rather than sitting only on /api/student/profile because the app bar, the drawer and
+/// the account menu all name the signed-in person, and reading that name from anywhere but the
+/// session is how the bar ends up still showing the old one after a save.
+/// </summary>
+public record MeResponse(Guid UserId, string Email, string FullName, string Role, string? TeacherStatus, DateTimeOffset? TeacherDecidedAtUtc, string? PhotoETag, string? Subject, string? Phone, string? DisplayName);
 
 public record PhotoUpdatedResponse(string ETag, DateTimeOffset UpdatedAtUtc);
