@@ -18,6 +18,9 @@ interface CardAction {
  * One approved teacher, as anyone may see them. Shared by the directory and the home-page strip
  * so the two cannot drift apart.
  *
+ * The teacher's phone number rides at the foot as a `tel:` link, so somebody weighing up the
+ * course has a way to ask about it before they have an account to ask from.
+ *
  * The card's action depends on who is looking — a visitor is invited to sign up, a student
  * already on the course goes straight to it, a student who isn't is told how to ask, and a
  * teacher or admin gets no action at all because the page isn't for them. Whatever the branch,
@@ -81,7 +84,7 @@ interface CardAction {
         </div>
       </dl>
 
-      <!-- The two facts that are about the course rather than about how it is going. They sit
+      <!-- The facts that are about the course rather than about how it is going. They sit
            together at the foot so the three figures above stay the thing the eye lands on. -->
       <ul class="tcard__foot tabular-nums">
         <li>
@@ -93,6 +96,18 @@ interface CardAction {
           <mat-icon aria-hidden="true">event</mat-icon>
           <span>Teaching since {{ teacher.memberSinceUtc | date: 'MMM y' }}</span>
         </li>
+        <!-- The one line here that does something rather than says something, so it is a real
+             tel: link. The card's own click handler already steps aside for anything inside an
+             <a>, so tapping the number dials rather than opening the course. Absent for a teacher
+             who registered before the field existed, and the line is then omitted rather than
+             filled with a placeholder. -->
+        @if (teacher.phone) {
+          <li>
+            <mat-icon aria-hidden="true">call</mat-icon>
+            <a class="tcard__phone" [href]="'tel:' + teacher.phone"
+              [attr.aria-label]="'Call ' + teacher.fullName + ' on ' + teacher.phone">{{ teacher.phone }}</a>
+          </li>
+        }
       </ul>
 
       @if (courseLink(); as link) {
@@ -224,6 +239,19 @@ interface CardAction {
       margin-top: 0.05rem;
       opacity: 0.8;
     }
+    /* A number is read in groups, so it must not be broken across a line the way the lines
+       above it may. It is underlined only on hover: on a card of quiet grey lines, a permanent
+       rule would make the phone number look like the loudest thing on it. */
+    .tcard__phone {
+      color: inherit;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .tcard__phone:hover, .tcard__phone:focus-visible {
+      color: var(--primary);
+      text-decoration: underline;
+    }
+
     /* The auto top margin drops the button to the foot of the card, so a row of cards of
        unequal height still lines their buttons up along the bottom. */
     .tcard__action { margin-top: auto; }

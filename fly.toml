@@ -3,6 +3,10 @@
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
+# The project is called Teach Me; these three names are not renamed with it. The app name is the
+# deployed hostname, the connection string points at a file on a live volume, and the seed email
+# identifies the administrator row that already exists in that file. Changing any of them creates
+# a new thing rather than renaming the old one.
 app = 'teaching-learning-platform'
 primary_region = 'ams'
 

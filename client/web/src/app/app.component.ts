@@ -54,13 +54,13 @@ export class AppComponent {
     typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /** The one destination that is not behind a session. Signed out, it is the only thing in the
-   * bar worth navigating to; a teacher or admin doesn't get it — their bars are full and the
-   * directory isn't aimed at them. */
-  private static readonly directory: NavLink = { path: '/teachers', label: 'Teachers', icon: 'groups' };
+   * bar worth navigating to; a teacher or admin doesn't get it — their bars are full and
+   * discovering a course to take isn't aimed at them. */
+  private static readonly discover: NavLink = { path: '/discover', label: 'Discover', icon: 'explore' };
 
   readonly links = computed<NavLink[]>(() => {
     const me = this.auth.me();
-    if (!me) return [AppComponent.directory];
+    if (!me) return [AppComponent.discover];
 
     switch (me.role) {
       case 'Admin':
@@ -77,7 +77,7 @@ export class AppComponent {
       }
       case 'Student':
         return [
-          AppComponent.directory,
+          AppComponent.discover,
           { path: '/student/courses', label: 'Courses', icon: 'school' },
           { path: '/student/join', label: 'Join', icon: 'key' },
           { path: '/student/whats-new', label: "What's New", icon: 'celebration' },

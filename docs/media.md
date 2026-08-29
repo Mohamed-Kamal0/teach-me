@@ -233,7 +233,7 @@ seed time.
 
 ## 9. Tests
 
-`server/TeachersLessons.Api.Tests`:
+`server/TeachMe.Api.Tests`:
 
 - **`AvatarImageProcessorTests`** — a 4000×1000 PNG becomes a 256×256 WebP; a text file throws
   `ValidationException`; a 12000×12000 header is rejected without a full decode; centre-crop keeps
@@ -253,7 +253,7 @@ renders initials + a stable hue when it is null, falls back to initials on `img`
 
 ## 10. Build order
 
-1. Add `SixLabors.ImageSharp` to `TeachersLessons.Api.csproj`.
+1. Add `SixLabors.ImageSharp` to `TeachMe.Api.csproj`.
 2. `Domain/Avatar.cs` + `AvatarConfiguration` + `DbSet` + `dotnet ef migrations add AddAvatars`.
 3. `AvatarImageProcessor` + DI registration + its unit tests.
 4. `PhotoController` (`PUT` / `DELETE` / `GET`) + endpoint tests.

@@ -5,8 +5,11 @@ import { teacherApprovedGuard } from './core/guards/teacher-approved.guard';
 
 export const routes: Routes = [
   { path: '', loadComponent: () => import('./features/public/home.component').then(m => m.HomeComponent) },
-  // No guard: the directory is the first thing a visitor with no session can read.
-  { path: 'teachers', loadComponent: () => import('./features/public/teachers.component').then(m => m.TeachersComponent) },
+  // No guard: discovering what is taught here is the first thing a visitor with no session can do.
+  { path: 'discover', loadComponent: () => import('./features/public/discover.component').then(m => m.DiscoverComponent) },
+  // The page was called /teachers until it grew into "every course here". Anything already
+  // bookmarked or linked lands on the same page rather than on the not-found screen.
+  { path: 'teachers', redirectTo: 'discover', pathMatch: 'full' },
   { path: 'login', loadComponent: () => import('./features/auth/login.component').then(m => m.LoginComponent) },
   { path: 'register/teacher', loadComponent: () => import('./features/auth/register-teacher.component').then(m => m.RegisterTeacherComponent) },
   { path: 'register/student', loadComponent: () => import('./features/auth/register-student.component').then(m => m.RegisterStudentComponent) },

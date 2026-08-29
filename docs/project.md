@@ -1,6 +1,6 @@
 # FINAL PROJECT · DAYS 16–19
 
-## Teachers, Lessons and Students
+## Teach Me
 
 **Mohamed Kamal — your brief.** Everything the client wants is on these six pages. How it is built is not on them, and that is on purpose.
 

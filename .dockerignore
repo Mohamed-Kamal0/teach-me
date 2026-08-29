@@ -9,4 +9,4 @@
 .git/
 .vscode/
 client/web/
-server/TeachersLessons.Api.Tests/
+server/TeachMe.Api.Tests/

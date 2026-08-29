@@ -54,6 +54,18 @@ import { NotifyService } from '../../core/notify.service';
               @if (row.subject) { {{ row.subject }} } @else { <span class="text-muted">—</span> }
             </td>
           </ng-container>
+          <!-- The way to ask a question before deciding. The same number goes on the teacher's
+               course card once they are approved, so what is checked here is what students get. -->
+          <ng-container matColumnDef="phone">
+            <th mat-header-cell *matHeaderCellDef>Phone</th>
+            <td mat-cell *matCellDef="let row" data-label="Phone" class="cell-phone">
+              @if (row.phone) {
+                <a [href]="'tel:' + row.phone">{{ row.phone }}</a>
+              } @else {
+                <span class="text-muted">—</span>
+              }
+            </td>
+          </ng-container>
           <ng-container matColumnDef="email">
             <th mat-header-cell *matHeaderCellDef>Email</th>
             <td mat-cell *matCellDef="let row" data-label="Email" class="cell-email">{{ row.email }}</td>
@@ -85,6 +97,8 @@ import { NotifyService } from '../../core/notify.service';
   styles: [`
     .cell-name { font-weight: 500; display: flex; align-items: center; gap: 0.6rem; }
     .cell-email { word-break: break-all; }
+    /* A number is read in groups, so it must not be broken across a line the way an email may. */
+    .cell-phone { white-space: nowrap; }
     .danger-action { color: var(--danger); }
     .decided { display: inline-flex; align-items: center; gap: 0.25rem; }
     @media (max-width: 560px) {
@@ -93,7 +107,7 @@ import { NotifyService } from '../../core/notify.service';
   `]
 })
 export class ApprovalsComponent implements OnInit {
-  columns = ['fullName', 'subject', 'email', 'createdAtUtc', 'actions'];
+  columns = ['fullName', 'subject', 'phone', 'email', 'createdAtUtc', 'actions'];
   status = signal<TeacherStatus>('Pending');
   loading = signal(true);
   error = signal<ProblemDetails | null>(null);

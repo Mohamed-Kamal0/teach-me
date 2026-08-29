@@ -202,11 +202,11 @@ production by unsetting one secret, with no client deploy.
 ### 6.1 Package
 
 ```bash
-dotnet add package Google.GenAI     # from server/TeachersLessons.Api
+dotnet add package Google.GenAI     # from server/TeachMe.Api
 ```
 
 Google's official .NET SDK for the Gemini API ([googleapis/dotnet-genai](https://googleapis.github.io/dotnet-genai/)).
-Pin whatever version `dotnet add` resolves into `TeachersLessons.Api.csproj`. Community packages
+Pin whatever version `dotnet add` resolves into `TeachMe.Api.csproj`. Community packages
 exist (`Mscc.GenerativeAI`, `Google_GenerativeAI`) and are more featureful, but this call needs one
 method and one config object — take the first-party one.
 
@@ -457,7 +457,7 @@ carries on.
 | `Features/Helper/Validators/HelperQuestionValidator.cs` | **New.** §7.4. |
 | `helper-system-prompt.md` | **New.** §6.4, `CopyToOutputDirectory="PreserveNewest"` alongside `helper-intents.json`. |
 | `Common/ServiceRegistration.cs` | Composition, below. |
-| `TeachersLessons.Api.csproj` | `PackageReference Include="Google.GenAI"` + the new content file. |
+| `TeachMe.Api.csproj` | `PackageReference Include="Google.GenAI"` + the new content file. |
 | `Features/Helper/Controllers/HelperController.cs` | **Unchanged.** |
 | `Features/Helper/Dtos/Dtos.cs` | **Unchanged.** |
 | Angular | **Unchanged**, except the `maxlength` in §12. |
@@ -574,7 +574,7 @@ Get a key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
 alongside the two secrets already in [`README.md`](../README.md) step 1:
 
 ```bash
-# from server/TeachersLessons.Api
+# from server/TeachMe.Api
 dotnet user-secrets set "Ai:ApiKey" "AIza..."
 ```
 

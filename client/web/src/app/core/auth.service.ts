@@ -40,8 +40,8 @@ export class AuthService {
     return response;
   }
 
-  async registerTeacher(fullName: string, email: string, password: string, subject: string): Promise<void> {
-    await firstValueFrom(this.http.post('/api/auth/register/teacher', { fullName, email, password, subject }));
+  async registerTeacher(fullName: string, email: string, password: string, subject: string, phone: string): Promise<void> {
+    await firstValueFrom(this.http.post('/api/auth/register/teacher', { fullName, email, password, subject, phone }));
   }
 
   async registerStudent(fullName: string, email: string, password: string): Promise<void> {
@@ -61,12 +61,15 @@ export class AuthService {
   }
 
   /**
-   * Restates what the signed-in teacher teaches. `me` is refreshed afterwards because the subject
-   * rides on identity — the profile card reads it back from there rather than keeping a second
-   * copy that could disagree with the server.
+   * Restates what the signed-in teacher teaches and how to reach them. Both go in one request
+   * because they are edited together behind one Save; sending one alone would read on the server
+   * as the other being cleared.
+   *
+   * `me` is refreshed afterwards because both fields ride on identity — the profile card reads
+   * them back from there rather than keeping a second copy that could disagree with the server.
    */
-  async updateSubject(subject: string): Promise<void> {
-    await firstValueFrom(this.http.put('/api/me/subject', { subject }));
+  async updateTeacherProfile(subject: string, phone: string): Promise<void> {
+    await firstValueFrom(this.http.put('/api/me/teacher-profile', { subject, phone }));
     await this.refreshMe();
   }
 

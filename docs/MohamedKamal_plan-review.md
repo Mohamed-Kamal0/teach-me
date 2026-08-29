@@ -1,4 +1,4 @@
-# Plan review — Mohamed Kamal · Teachers, Lessons and Students
+# Plan review — Mohamed Kamal · Teach Me
 
 **Reviewed:** 2026-08-25
 **Judged on:** general engineering practice — is the vision clear, is the scope honest against the

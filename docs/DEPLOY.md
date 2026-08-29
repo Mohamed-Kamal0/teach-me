@@ -353,7 +353,7 @@ Run the API in a second terminal, in Production, passing the secrets as environm
 .NET only reads user-secrets in Development:
 
 ```powershell
-cd server/TeachersLessons.Api
+cd server/TeachMe.Api
 $env:ASPNETCORE_ENVIRONMENT = "Production"
 $env:Seed__AdminEmail = "admin@teacherslessons.test"
 $env:Seed__AdminPassword = "YOUR-ADMIN-PASSWORD"

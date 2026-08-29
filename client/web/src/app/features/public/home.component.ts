@@ -19,7 +19,7 @@ import { AuthService } from '../../core/auth.service';
     <section class="hero">
       <div class="hero__inner reveal">
         <span class="eyebrow">A lesson opens in three moments</span>
-        <h1>Teachers, Lessons and Students</h1>
+        <h1>Teach Me</h1>
         <p class="lede">Teachers publish lessons — recording, handout, quiz and answers — and each
         part opens on its own schedule. Students follow the courses they've joined and see each
         part the moment it's released, and not before.</p>
@@ -78,15 +78,15 @@ import { AuthService } from '../../core/auth.service';
              already in hand, not a second fetch, and not restated here either. -->
         @if (teachers().length) {
           <section class="meet reveal">
-            <h2 class="meet__title">Meet the teachers</h2>
-            <p class="meet__sub">A first look at who is teaching here.</p>
+            <h2 class="meet__title">Courses to discover</h2>
+            <p class="meet__sub">A first look at what is being taught here.</p>
             <div class="meet__grid">
               @for (t of teachers(); track t.userId) {
                 <app-teacher-card [teacher]="t" [enrolled]="enrolledIds().has(t.userId)"></app-teacher-card>
               }
             </div>
-            <a mat-stroked-button routerLink="/teachers" class="meet__all">
-              Browse all teachers <mat-icon>arrow_forward</mat-icon>
+            <a mat-stroked-button routerLink="/discover" class="meet__all">
+              Discover every course <mat-icon>arrow_forward</mat-icon>
             </a>
           </section>
         }
@@ -237,7 +237,7 @@ import { AuthService } from '../../core/auth.service';
     .meet__sub { margin: 0.3rem 0 1.25rem; color: var(--muted); }
     .meet__grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(min(19rem, 100%), 1fr));
       gap: 1rem;
       align-items: stretch;
       text-align: left;

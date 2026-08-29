@@ -8,7 +8,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { BusyRingComponent } from '../../shared/busy-ring.component';
 import { AuthService } from '../../core/auth.service';
-import { PASSWORD_RULE, applyServerErrors, fieldMessage, revealErrors } from '../../core/form-errors';
+import { PASSWORD_RULE, PHONE_MESSAGES, PHONE_PATTERN, applyServerErrors, fieldMessage, revealErrors } from '../../core/form-errors';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
 
 function passwordsMatch(control: AbstractControl): ValidationErrors | null {
@@ -61,6 +61,17 @@ function passwordsMatch(control: AbstractControl): ValidationErrors | null {
                 <input matInput formControlName="subject" autocomplete="off" maxlength="60" />
                 <mat-hint>Mathematics, Biology, English Literature…</mat-hint>
                 @if (message('subject', 'Subject'); as msg) { <mat-error>{{ msg }}</mat-error> }
+              </mat-form-field>
+
+              <!-- Asked for here rather than left to the profile screen, for the same reason the
+                   subject is: it is how an administrator reaches a teacher before deciding on the
+                   application, and afterwards it is how a student asks about the course. -->
+              <mat-form-field appearance="outline">
+                <mat-label>Phone number</mat-label>
+                <input matInput type="tel" formControlName="phone" autocomplete="tel"
+                  inputmode="tel" maxlength="30" />
+                <mat-hint>Shown on your course card once you're approved, so students can ask about it.</mat-hint>
+                @if (message('phone', 'Phone number'); as msg) { <mat-error>{{ msg }}</mat-error> }
               </mat-form-field>
 
               <mat-form-field appearance="outline">
@@ -135,6 +146,7 @@ export class RegisterTeacherComponent {
     fullName: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(120)]],
     email: ['', [Validators.required, Validators.email]],
     subject: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(60)]],
+    phone: ['', [Validators.required, Validators.maxLength(30), Validators.pattern(PHONE_PATTERN)]],
     password: ['', [Validators.required, Validators.minLength(8), Validators.pattern(/^(?=.*[A-Za-z])(?=.*\d).+$/)]],
     confirmPassword: ['', [Validators.required]]
   }, { validators: passwordsMatch });
@@ -147,6 +159,9 @@ export class RegisterTeacherComponent {
         minlength: 'Enter the subject you teach.',
         maxlength: 'Enter the subject you teach, in 60 characters or fewer.'
       });
+    }
+    if (name === 'phone') {
+      return fieldMessage(this.form, name, label, PHONE_MESSAGES);
     }
     return fieldMessage(this.form, name, label, name === 'password' ? { pattern: PASSWORD_RULE, minlength: PASSWORD_RULE } : {});
   }
@@ -164,8 +179,8 @@ export class RegisterTeacherComponent {
     this.submitting.set(true);
     this.banner.set(null);
     try {
-      const { fullName, email, password, subject } = this.form.getRawValue();
-      await this.auth.registerTeacher(fullName!, email!, password!, subject!);
+      const { fullName, email, password, subject, phone } = this.form.getRawValue();
+      await this.auth.registerTeacher(fullName!, email!, password!, subject!, phone!.trim());
       this.done.set(true);
     } catch (err) {
       this.banner.set(applyServerErrors(this.form, problemFrom(err)));

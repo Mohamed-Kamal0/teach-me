@@ -12,6 +12,9 @@ export interface MeResponse {
   /** What a teacher teaches. Null for everyone else, and for a teacher who registered before
    *  the field existed — which is a real state, not a blank to render. */
   subject: string | null;
+  /** How to reach a teacher off the platform. Null for everyone else, and for a teacher who
+   *  registered before the field existed. */
+  phone: string | null;
 }
 
 export interface LoginResponse {
@@ -47,6 +50,7 @@ export interface TeacherSummary {
   fullName: string;
   subject: string | null;
   email: string;
+  phone: string | null;
   status: TeacherStatus;
   createdAtUtc: string;
   decidedAtUtc: string | null;
@@ -60,6 +64,9 @@ export interface PublicTeacher {
   userId: string;
   fullName: string;
   subject: string | null;
+  /** How to reach the teacher about the course. Null for a teacher who registered before the
+   *  field existed — a real state, not a blank to render. */
+  phone: string | null;
   photoETag: string | null;
   memberSinceUtc: string;
   openLessonCount: number;

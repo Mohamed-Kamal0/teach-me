@@ -341,8 +341,8 @@ A password box you cannot read is how a typo becomes *"Email or password is inco
 ### 1.1 A teacher registers
 
 **Who:** anyone, signed out.
-**The screen:** `/register/teacher` — name, email, **the subject they teach**, password, confirm
-password, each password box with the reveal toggle from §0.7. Submit stays disabled
+**The screen:** `/register/teacher` — name, email, **the subject they teach**, **a phone number**,
+password, confirm password, each password box with the reveal toggle from §0.7. Submit stays disabled
 while invalid. On success the teacher lands on `/teacher/standing`, which says the account is
 waiting.
 
@@ -350,11 +350,15 @@ waiting.
 
 **The server:**
 
-1. `RegisterTeacherRequestValidator` checks name, email shape, password strength and the match.
+1. `RegisterTeacherRequestValidator` checks name, email shape, **subject**, **phone**, password
+   strength and the match — subject and phone under the same rules `PUT /api/me/teacher-profile`
+   holds them to later (§3.9), so the screen that first states them and the screen that changes
+   them cannot disagree.
 2. The email is **normalised to lowercase** and checked against `Users` — the one table that owns
    every identity, so "already in use by anybody" includes students and the administrator.
 3. A `User` row (role `Teacher`, UUIDv7 id, `PasswordHasher<User>` hash) and a `Teacher` row are
-   inserted together. The `Teacher` row gets `Status = Pending`, the **trimmed subject**, and a
+   inserted together. The `Teacher` row gets `Status = Pending`, the **trimmed subject and
+   phone**, and a
    **unique 8-character Crockford base32 joining code**, retried up to ten times against the unique
    index.
 
@@ -967,32 +971,40 @@ teaching. A teacher who has been turned away can still change their password; th
 something wrong with an app that refused them that.
 
 **The screen:** `/teacher/profile` — the identity band (photo, name, email; the last two read-only
-here), then **the subject card**, then the password card.
+here), then **the teaching-profile card**, then the password card.
 **The calls:** `PUT /api/me/photo` (multipart) · `DELETE /api/me/photo`, fully described in §6.3 ·
-`PUT /api/me/password`, fully described in §1.6 · **`PUT /api/me/subject`** → **204**.
+`PUT /api/me/password`, fully described in §1.6 · **`PUT /api/me/teacher-profile`** → **204**.
 
 The identity band and the password card are shared components used unchanged by the student and
 administrator profiles, so those screens differ only in the eyebrow above the heading and what sits
 between them.
 
-**The subject card is the one that is a teacher's alone**, and it sits above the password card
-because it is the thing a teacher comes back to this page to change, where a password reset is the
-thing they hope never to need.
+**The teaching-profile card is the one that is a teacher's alone.** It holds **the subject they
+teach** and **their phone number**, and it sits above the password card because these are the things
+a teacher comes back to this page to change, where a password reset is the thing they hope never to
+need.
 
-- **A pending teacher may use it.** Same reason the whole route has no approved guard: the subject
-  is what the decision about them turns on, so a typo in it has to be fixable *while* waiting.
-- **The route is `/api/me/subject`, not `/api/teacher/subject`.** Everything under `/api/teacher/*`
-  is fenced behind the approved policy and §3.1 says so without exception; one unfenced route inside
-  that prefix would cost more than it saved. Under `/api/me` it sits beside `password` and `photo`
-  — the routes that change **the account holding the cookie**, with no id in the body to tamper with.
-- **The value is read back from `GET /api/me`**, not from a fetch of its own. The subject rides on
-  identity for the same reason standing does (§3.1), so the client holds exactly one copy of it.
-- **The box follows `me` only while it is pristine.** A refresh that overwrote what somebody was
-  halfway through typing would be the card losing their work for them.
+- **Both fields, one Save, one request.** The server replaces the pair, so sending one alone would
+  read as the other being cleared. The button is disabled until one of the two differs from what
+  `me` already holds.
+- **A pending teacher may use it.** Same reason the whole route has no approved guard: these are
+  what the decision about them turns on — the subject, and the number an administrator rings to ask
+  — so a typo in either has to be fixable *while* waiting.
+- **The route is `/api/me/teacher-profile`, not `/api/teacher/profile`.** Everything under
+  `/api/teacher/*` is fenced behind the approved policy and §3.1 says so without exception; one
+  unfenced route inside that prefix would cost more than it saved. Under `/api/me` it sits beside
+  `password` and `photo` — the routes that change **the account holding the cookie**, with no id in
+  the body to tamper with.
+- **The values are read back from `GET /api/me`**, not from a fetch of their own. Both ride on
+  identity for the same reason standing does (§3.1), so the client holds exactly one copy of each.
+- **The boxes follow `me` only while the form is pristine.** A refresh that overwrote what somebody
+  was halfway through typing would be the card losing their work for them.
 
 **When it fails:** **400** *"Enter the subject you teach."* for a blank or whitespace-only one, or
-*"… in 60 characters or fewer."* over the bound — the same two sentences the registration form uses,
-from the same rule · **403** for anyone who is not a teacher · **400** without a valid `X-XSRF-TOKEN`.
+*"… in 60 characters or fewer."* over the bound · **400** *"Enter a phone number."* for a blank one,
+or *"Enter a phone number using digits, spaces, + - or ( )."* for anything that is not one — the
+same sentences the registration form uses, from the same rules in `RegistrationRules` · **403** for
+anyone who is not a teacher · **400** without a valid `X-XSRF-TOKEN`.
 
 **Proved by:** `PublicDirectoryTests` — a teacher corrects their subject and the directory follows on
 the next read, a blank one is refused on the `subject` key, and a student calling it gets a 403.
@@ -1312,8 +1324,11 @@ SQLite file, `dotnet ef database update`, load `/` in a private window: that is 
 someone with no session — `/api/public/home` only ever returned two totals, so nothing it sent could
 be traced to a person. Rows are a different problem, and three rules hold it.
 
-**The screen:** `/teachers` — a card per approved teacher: their photo, their name, **the subject
-they teach**, when they joined, and their own course's numbers. One search box over the lot.
+**The screen:** `/discover` — a card per approved teacher's course: their photo, their name, **the
+subject they teach**, **a phone number to ask on**, when they joined, and that course's numbers. One
+search box over the lot. The page is named for what somebody does on it rather than for the rows it
+holds — a visitor arrives looking for a course to take, not for a list of staff. `/teachers`, the
+name it had before, **redirects to it**, so an existing bookmark still lands on the page.
 **The call:** `GET /api/public/teachers?page=&pageSize=&q=` → **200** paged
 
 **Rule 1 — a separate DTO, never a reused one.** `PublicTeacherDto` exists so that a field added later
@@ -1324,7 +1339,11 @@ anonymous page by accident.
 certainly is not.
 
 **Rule 3 — every number is an aggregate over the teacher's own course**, and none can be traced to one
-student: open lessons, published lessons, students, marks, passes. The **open-lesson count uses the
+student: open lessons, published lessons, students, marks, passes. The **phone number is the one
+field on the card that is not an aggregate**, and it is a teacher's own contact detail, published
+because somebody weighing up a course needs a way to ask about it before they have an account to ask
+from. It is still governed by Rule 2 — a pending teacher's number is as unpublished as the rest of
+their row. The **open-lesson count uses the
 same predicate as `VisibleTo`**, so it cannot drift from what a student sees inside the course. **Pass
 *rate* is deliberately not computed server-side** — a course with no marks has no pass rate, and
 rendering "—" is the client's decision, not a number the server should invent.
@@ -1548,14 +1567,14 @@ answers **401** signed out. Every non-`GET` additionally answers **400** without
 | `POST /api/auth/register/student`                   | anyone             | 201                                            | 400 email in use (**any** role), 400 validation             | 1.2  |
 | `POST /api/auth/login`                              | anyone             | 200 `{role, teacherStatus?}` + `Set-Cookie`    | 400 *"Email or password is incorrect"* — never which half   | 1.3  |
 | `POST /api/auth/logout`                             | any signed-in      | 204 + cookie cleared                           | —                                                           | 1.5  |
-| `GET /api/me`                                       | any signed-in      | 200 identity + standing + `photoETag` + `subject` | —                                                        | 1.4  |
+| `GET /api/me`                                       | any signed-in      | 200 identity + standing + `photoETag` + `subject` + `phone` | —                                              | 1.4  |
 | `PUT /api/me/password`                              | any signed-in      | 204 — nothing echoed, session undisturbed      | 400 wrong current · 400 policy · 400 reuse — each named on its field | 1.6 |
-| `PUT /api/me/subject`                               | Teacher, **any standing** | 204                                     | 400 blank / over 60 chars, **403 not a teacher**            | 3.9  |
+| `PUT /api/me/teacher-profile`                       | Teacher, **any standing** | 204 — subject and phone, replaced as a pair | 400 blank / over 60 chars · 400 blank or malformed phone, **403 not a teacher** | 3.9  |
 | `PUT /api/me/photo`                                 | any signed-in      | 200 `{photoETag, updatedAtUtc}`                | 400 not an image, **413** over 5 MB                         | 6.3  |
 | `DELETE /api/me/photo`                              | any signed-in      | 204 (idempotent)                               | —                                                           | 6.3  |
 | `GET /api/users/{userId}/photo`                     | any signed-in      | 200 webp, `private, max-age=300` · 304         | 404 no photo                                                | 6.3  |
 | `GET /api/public/home`                              | anyone, no cookie  | 200 `{counts, howToJoin}`                      | — reads `0` on an empty database                            | 6.1  |
-| `GET /api/public/teachers`                          | anyone, no cookie  | 200 paged, approved only; `?q=` **name or subject** | — legitimately empty                                   | 6.2  |
+| `GET /api/public/teachers`                          | anyone, no cookie  | 200 paged, approved only, incl. `phone`; `?q=` **name or subject** | — legitimately empty                    | 6.2  |
 | `GET /api/public/teachers/{userId}/photo`           | anyone, no cookie  | 200 webp, `public, max-age=300` · 304          | **404** for "no photo" **and** "not approved", identically  | 6.3  |
 | `GET /api/health`                                   | anyone, no cookie  | 200 `{status, db}`                             | 503 database unreachable                                    | 6.4  |
 | `GET /api/admin/teachers?status=`                   | Admin              | 200 paged, name asc                            | 403                                                         | 2.1  |
@@ -1586,7 +1605,8 @@ answers **401** signed out. Every non-`GET` additionally answers **400** without
 | Route                             | Guard                              | § |
 | :-------------------------------- | :--------------------------------- | :-- |
 | `/`                               | none                               | 6.1 |
-| `/teachers`                       | **none — readable signed out**     | 6.2 |
+| `/discover`                       | **none — readable signed out**     | 6.2 |
+| `/teachers`                       | redirects to `/discover`           | 6.2 |
 | `/login` · `/register/teacher` · `/register/student` | none            | 1   |
 | `/admin/approvals`                | `roleGuard('Admin')`               | 2.1 |
 | `/admin/profile`                  | `roleGuard('Admin')`               | 1.6 |

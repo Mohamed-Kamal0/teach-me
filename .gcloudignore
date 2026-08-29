@@ -21,7 +21,7 @@ client/
 **/*.db-wal
 
 # Tests are not part of the published image
-server/TeachersLessons.Api.Tests/
+server/TeachMe.Api.Tests/
 
 # Coursework and planning documents
 *.md

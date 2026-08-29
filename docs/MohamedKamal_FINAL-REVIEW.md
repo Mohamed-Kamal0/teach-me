@@ -1,4 +1,4 @@
-# Final review — Mohamed Kamal · Teachers, Lessons and Students
+# Final review — Mohamed Kamal · Teach Me
 
 **Reviewed:** 2026-08-25 · **Supersedes** `MohamedKamal_plan-review.md` and `MohamedKamal_planV2-review.md`
 **Judged on:** general engineering practice — vision, scope against the time, schema, API contract,

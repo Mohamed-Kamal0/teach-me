@@ -1,10 +1,10 @@
-# Teachers, Lessons and Students
+# Teach Me
 
 An ASP.NET Core 10 + Angular 18 teaching platform. Teachers publish lessons — a recording, and
 optionally a handout, a quiz and its answers — each released on its own schedule. Students join a
-teacher's course with a joining code and see only what is open to them, now. A public directory
-at `/teachers` lists every approved teacher, the subject they teach and their own course's numbers,
-searchable by name or subject, signed in or not.
+teacher's course with a joining code and see only what is open to them, now. **Discover**, at
+`/discover`, lists every course being taught here — the teacher, the subject, a phone number to ask
+on, and that course's own numbers — searchable by name or subject, signed in or not.
 Anyone signed in can set a profile photo and reset their own password, and a student can ask an
 in-app helper — backed by a model that is shown only that student's own data — where to find things.
 
@@ -41,7 +41,7 @@ Nothing sensitive lives in `appsettings.json`. The API **fails fast at startup**
 message if either of these is missing.
 
 ```bash
-cd server/TeachersLessons.Api
+cd server/TeachMe.Api
 dotnet user-secrets init
 dotnet user-secrets set "Seed:AdminEmail"    "admin@teacherslessons.test"
 dotnet user-secrets set "Seed:AdminPassword" "Admin1234"
@@ -55,7 +55,7 @@ two above, this secret has an excellent fallback, so the app boots either way an
 took. Get a key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey):
 
 ```bash
-# from server/TeachersLessons.Api
+# from server/TeachMe.Api
 dotnet user-secrets set "Ai:ApiKey" "AIza..."
 ```
 
@@ -66,7 +66,7 @@ the student's own screens would already return.
 ### 2. Create the database and load the demo data
 
 ```bash
-# from server/TeachersLessons.Api
+# from server/TeachMe.Api
 dotnet restore
 dotnet ef database update
 dotnet run -- seed --demo
@@ -78,7 +78,7 @@ demo day is a thirty-second fix. It refuses to run when `ASPNETCORE_ENVIRONMENT=
 ### 3. Run the API
 
 ```bash
-# from server/TeachersLessons.Api
+# from server/TeachMe.Api
 dotnet run --urls http://localhost:5099
 ```
 
@@ -256,7 +256,7 @@ lesson read goes through.
 ## How it is laid out
 
 ```
-server/TeachersLessons.Api/
+server/TeachMe.Api/
   Domain/       entities and enums, Guid (UUIDv7) keys — including Avatar, the photo row
   Data/         AppDbContext, per-entity configurations, DbSeeder, DemoSeeder
   Features/     Auth · Admin · Teacher · Student · Public · Helper — controller + DTOs + validators
@@ -266,13 +266,13 @@ server/TeachersLessons.Api/
   Migrations/
   helper-intents.json       the Req 18 phrase list — content, not code, and the helper's floor
   helper-system-prompt.md   the AI helper's instructions — content too, for the same reason
-server/TeachersLessons.Api.Tests/    the suites above
+server/TeachMe.Api.Tests/    the suites above
 client/web/src/app/
   core/         auth service, interceptors, guards, models
   shared/       StatePanelComponent (loading | error | empty), MediaEmbedComponent,
                 AvatarComponent, IdentityCardComponent, PasswordCardComponent, BusyRingComponent,
                 ReleaseRailComponent, dialogs
-  features/     one folder per area, mirroring the API — plus public/ for the directory
+  features/     one folder per area, mirroring the API — plus public/ for Discover
   styles/       _theme.scss — the palette, with its measured contrast ratios
 docs/           every document except this one — the brief, the plan, the feature walk-through,
                 the runbook, and the plan behind each later feature

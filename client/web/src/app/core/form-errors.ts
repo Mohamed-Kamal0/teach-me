@@ -6,6 +6,19 @@ import { ProblemDetails } from './models';
  * as the message when it is — so the rule a person reads and the rule they failed are one string. */
 export const PASSWORD_RULE = 'Use at least 8 characters, including a letter and a number.';
 
+/** The shape a phone number is held to, matching `RegistrationRules.PhonePattern` on the server:
+ * digits, spaces, and the punctuation an international number is written with. Stated here once
+ * so the teacher registration form and the teacher profile card cannot drift apart. */
+export const PHONE_PATTERN = /^[0-9 +\-()]+$/;
+
+/** The server's wording for that rule, so the browser and the API say the same sentence about
+ * the same field rather than two sentences that happen to mean the same thing. */
+export const PHONE_MESSAGES = {
+  required: 'Enter a phone number.',
+  maxlength: 'Enter a phone number of 30 characters or fewer.',
+  pattern: 'Enter a phone number using digits, spaces, + - or ( ).'
+};
+
 /** Per-field wording that the generic rules below can't know — a password policy, for instance. */
 export type MessageOverrides = Partial<Record<string, string>>;
 

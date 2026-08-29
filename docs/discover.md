@@ -468,7 +468,7 @@ No migration. No `AppDbContext` change. No new NuGet or npm package.
 
 ## 6. Tests
 
-A new suite, `server/TeachersLessons.Api.Tests/PublicDirectoryTests.cs`, on the existing
+A new suite, `server/TeachMe.Api.Tests/PublicDirectoryTests.cs`, on the existing
 `ApiFactory` (real SQLite in memory, `ManualTimeProvider` for the clock):
 
 | Test | Asserts |

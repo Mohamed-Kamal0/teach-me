@@ -1,4 +1,4 @@
-# Build Plan — Teachers, Lessons and Students
+# Build Plan — Teach Me
 
 > Companion to [`project.md`](project.md). The brief says **what** must work and **how it may fail**; it deliberately leaves **how it is built** undecided. This file is that decision.
 >
@@ -48,8 +48,8 @@ The Project/
     FEATURES.md                   # every feature end to end, with the code that implements it
     DEPLOY.md                     # the runbook
     media.md / discover.md / ai.md  # the plan behind each of the three later features
-  TeachersLessons.sln
-  server/TeachersLessons.Api/
+  TeachMe.slnx
+  server/TeachMe.Api/
     Program.cs
     Domain/                       # entities + enums (UserRole, TeacherStatus), Guid keys, no EF attributes
     Data/                         # AppDbContext, IEntityTypeConfiguration<T>, DbSeeder, DemoSeeder
@@ -67,7 +67,7 @@ The Project/
     Migrations/
     helper-intents.json           # Req 18 phrase list — content, not code, and the helper's floor
     helper-system-prompt.md       # §12.3 the AI helper's instructions — content too
-  server/TeachersLessons.Api.Tests/   # the rule suites, §10
+  server/TeachMe.Api.Tests/   # the rule suites, §10
   client/web/                     # ng new web --standalone --routing --style=scss
     proxy.conf.json               # /api -> the API, so the cookie is same-origin in dev
     smoke.mjs / smoke-api-down.mjs  # Playwright: the demo script, and the API killed underneath it
@@ -687,7 +687,7 @@ timeout, question-length cap, rate limits — is non-secret and lives in `appset
 `Ai`.
 
 ```bash
-dotnet user-secrets set "Seed:AdminPassword" "<choose one>" --project server/TeachersLessons.Api
+dotnet user-secrets set "Seed:AdminPassword" "<choose one>" --project server/TeachMe.Api
 ```
 
 `appsettings.json` holds the connection string and nothing else. The README lists exactly what a clean clone must set, and the API **fails fast at startup** with a readable message if a required secret is missing — better than a mystery 500 on day 18.
