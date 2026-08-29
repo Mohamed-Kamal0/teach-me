@@ -10,7 +10,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { BusyRingComponent } from '../../shared/busy-ring.component';
 import { forkJoin } from 'rxjs';
-import { Lesson, PagedResult, ProblemDetails, StudentSummary, TeacherStudentsResponse } from '../../core/models';
+import { CursorPage, Lesson, ProblemDetails, StudentSummary, TeacherStudentsResponse } from '../../core/models';
 import { applyServerErrors, fieldMessage, revealErrors } from '../../core/form-errors';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
 import { NotifyService } from '../../core/notify.service';
@@ -126,8 +126,10 @@ export class MarksNewComponent implements OnInit {
     this.loadingOptions.set(true);
     this.loadError.set(null);
     forkJoin({
-      students: this.http.get<TeacherStudentsResponse>('/api/teacher/students?pageSize=100'),
-      lessons: this.http.get<PagedResult<Lesson>>('/api/teacher/lessons?pageSize=100')
+      // Two dropdowns, not two scrolls — a picker has to hold every option at once, so both
+      // ask for the server's whole cap in one request rather than paging.
+      students: this.http.get<TeacherStudentsResponse>('/api/teacher/students?limit=100'),
+      lessons: this.http.get<CursorPage<Lesson>>('/api/teacher/lessons?limit=100')
     }).subscribe({
       next: ({ students, lessons }) => {
         this.students.set(students.students.items);

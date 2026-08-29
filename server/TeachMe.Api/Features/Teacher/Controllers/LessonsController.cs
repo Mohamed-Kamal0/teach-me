@@ -9,8 +9,8 @@ namespace TeachMe.Api.Features.Teacher.Controllers;
 public class LessonsController(ILessonService lessons) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<PagedResult<LessonDto>>> List([FromQuery] int? page, [FromQuery] int? pageSize, CancellationToken ct) =>
-        Ok(await lessons.ListAsync(page, pageSize, ct));
+    public async Task<ActionResult<CursorPage<LessonDto>>> List([FromQuery] string? cursor, [FromQuery] int? limit, CancellationToken ct) =>
+        Ok(await lessons.ListAsync(cursor, limit, ct));
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<LessonDto>> Get(Guid id, CancellationToken ct) =>
@@ -27,10 +27,10 @@ public class LessonsController(ILessonService lessons) : ControllerBase
     public async Task<ActionResult<LessonDto>> Update(Guid id, LessonRequest request, CancellationToken ct) =>
         Ok(await lessons.UpdateAsync(id, request, ct));
 
-    [HttpPut("order")]
-    public async Task<IActionResult> Reorder(ReorderRequest request, CancellationToken ct)
+    [HttpPut("{id:guid}/move")]
+    public async Task<IActionResult> Move(Guid id, MoveLessonRequest request, CancellationToken ct)
     {
-        await lessons.ReorderAsync(request, ct);
+        await lessons.MoveAsync(id, request.Up, ct);
         return NoContent();
     }
 

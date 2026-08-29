@@ -9,6 +9,6 @@ namespace TeachMe.Api.Features.Teacher.Controllers;
 public class ProgressController(IProgressService progress) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<PagedResult<ProgressDto>>> Get([FromQuery] int? page, [FromQuery] int? pageSize, CancellationToken ct) =>
-        Ok(await progress.GetAsync(page, pageSize, ct));
+    public async Task<ActionResult<CursorPage<ProgressDto>>> Get([FromQuery] string? cursor, [FromQuery] int? limit, CancellationToken ct) =>
+        Ok(await progress.GetAsync(cursor, limit, ct));
 }

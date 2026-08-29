@@ -222,6 +222,55 @@ let joinCode = null;
   await ctx.close();
 }
 
+// ---------- 9. The app bar never draws one control over another ----------
+// Nothing in the bar can shrink — MDC gives every button a 64px floor — so when a group stops
+// fitting it overflows its box and paints over its neighbour rather than wrapping. That failure
+// is silent: the page still works, it just reads as two words on top of each other. It is
+// arithmetic, so it is checked as arithmetic, at the widths either side of both breakpoints.
+{
+  const widths = [1400, 1100, 1024, 1000, 900, 700, 641, 640, 420, 360];
+
+  async function overlapsAt(page, width) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.waitForTimeout(150);
+    return page.$$eval('.app-bar a, .app-bar button', els => {
+      const boxes = els
+        .filter(el => el.offsetParent !== null)
+        .map(el => {
+          const r = el.getBoundingClientRect();
+          return { text: (el.textContent || '').trim().slice(0, 16), l: r.left, r: r.right };
+        })
+        .sort((a, b) => a.l - b.l);
+
+      const hits = [];
+      for (let i = 1; i < boxes.length; i++) {
+        if (boxes[i].l < boxes[i - 1].r - 1) hits.push(`${boxes[i - 1].text} over ${boxes[i].text}`);
+      }
+      return hits;
+    });
+  }
+
+  for (const [who, prepare] of [
+    ['signed out', async page => { await page.goto(`${BASE}/discover`, { waitUntil: 'networkidle' }); }],
+    ['student', async page => { await login(page, 'student.one@demo.test', 'Demo1234'); }],
+    ['teacher', async page => { await login(page, 'teacher.approved@demo.test', 'Demo1234'); }]
+  ]) {
+    const { ctx, page } = await newPage();
+    await prepare(page);
+    await page.waitForSelector('.app-bar');
+
+    const broken = [];
+    for (const width of widths) {
+      const hits = await overlapsAt(page, width);
+      if (hits.length) broken.push(`${width}px: ${hits.join(', ')}`);
+    }
+
+    if (broken.length) bad(`App bar overlaps — ${who}`, broken.join(' | '));
+    else ok(`App bar stays legible at every width — ${who}`);
+    await ctx.close();
+  }
+}
+
 await browser.close();
 
 console.log('\n=== SMOKE RESULTS ===');

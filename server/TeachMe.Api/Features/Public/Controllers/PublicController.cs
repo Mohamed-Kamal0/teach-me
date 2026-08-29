@@ -13,7 +13,7 @@ public class PublicController(IPublicDirectoryService directory) : ControllerBas
         Ok(await directory.GetHomeAsync(ct));
 
     [HttpGet("teachers")]
-    public async Task<ActionResult<PagedResult<PublicTeacherDto>>> Teachers(
-        [FromQuery] int? page, [FromQuery] int? pageSize, [FromQuery] string? q, CancellationToken ct) =>
-        Ok(await directory.GetTeachersAsync(page, pageSize, q, ct));
+    public async Task<ActionResult<CursorPage<PublicTeacherDto>>> Teachers(
+        [FromQuery] string? cursor, [FromQuery] int? limit, [FromQuery] string? q, CancellationToken ct) =>
+        Ok(await directory.GetTeachersAsync(cursor, limit, q, ct));
 }

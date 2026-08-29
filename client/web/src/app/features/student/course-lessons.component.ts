@@ -6,26 +6,27 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { StatePanelComponent } from '../../shared/state-panel.component';
+import { ScrollMoreComponent } from '../../shared/scroll-more.component';
 import { MediaEmbedComponent } from '../../shared/media-embed.component';
 import { ReleaseRailComponent } from '../../shared/release-rail.component';
-import { PagedResult, ProblemDetails, StudentLessonWithMark } from '../../core/models';
-import { problemFrom } from '../../core/interceptors/error.interceptor';
+import { CursorPage, StudentLessonWithMark } from '../../core/models';
+import { CursorList } from '../../core/cursor-list';
 
 @Component({
   selector: 'app-course-lessons',
   standalone: true,
   imports: [
     DatePipe, RouterLink, MatButtonModule, MatIconModule, MatExpansionModule, StatePanelComponent,
-    MediaEmbedComponent, ReleaseRailComponent
+    ScrollMoreComponent, MediaEmbedComponent, ReleaseRailComponent
   ],
   template: `
     <a mat-stroked-button routerLink="/student/courses" class="back-link"><mat-icon>arrow_back</mat-icon> Back to courses</a>
 
-    <app-state-panel [loading]="loading()" [error]="error()" [empty]="(rows()?.length ?? 0) === 0"
-      emptyIcon="menu_book" (retry)="load()"
+    <app-state-panel [loading]="list.loading()" [error]="list.error()" [empty]="list.rows().length === 0"
+      emptyIcon="menu_book" (retry)="list.start()"
       emptyMessage="Your teacher hasn't opened anything here yet.">
       <mat-accordion multi>
-        @for (item of rows(); track item.lesson.id) {
+        @for (item of list.rows(); track item.lesson.id) {
           <mat-expansion-panel class="lesson">
             <mat-expansion-panel-header>
               <mat-panel-title class="lesson__title">{{ item.lesson.title }}</mat-panel-title>
@@ -62,6 +63,9 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
           </mat-expansion-panel>
         }
       </mat-accordion>
+
+      <app-scroll-more [busy]="list.loadingMore()" [hasMore]="list.hasMore()"
+        [error]="list.moreError()" (more)="list.more()"></app-scroll-more>
     </app-state-panel>
   `,
   styles: [`
@@ -84,27 +88,22 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
   `]
 })
 export class CourseLessonsComponent implements OnInit {
-  loading = signal(true);
-  error = signal<ProblemDetails | null>(null);
-  rows = signal<StudentLessonWithMark[] | null>(null);
-
   private teacherId!: string;
   private http = inject(HttpClient);
   private route = inject(ActivatedRoute);
 
+  readonly list = new CursorList<StudentLessonWithMark>((cursor, limit) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) params.set('cursor', cursor);
+    return this.http.get<CursorPage<StudentLessonWithMark>>(
+      `/api/student/courses/${this.teacherId}/lessons?${params}`);
+  });
+
   ngOnInit(): void {
     this.teacherId = this.route.snapshot.paramMap.get('teacherId')!;
-    this.load();
+    this.list.start();
     // Marking the course seen is housekeeping — if it fails, nothing on this screen is wrong.
     this.http.post(`/api/student/courses/${this.teacherId}/seen`, {}).subscribe({ error: () => {} });
   }
 
-  load(): void {
-    this.loading.set(true);
-    this.error.set(null);
-    this.http.get<PagedResult<StudentLessonWithMark>>(`/api/student/courses/${this.teacherId}/lessons?pageSize=100`).subscribe({
-      next: (res) => { this.rows.set(res.items); this.loading.set(false); },
-      error: (err) => { this.error.set(problemFrom(err)); this.loading.set(false); }
-    });
-  }
 }

@@ -75,7 +75,7 @@ public class PendingTeacherTests : IClassFixture<ApiFactory>
 
     private static async Task<Guid> GetTeacherUserId(HttpClient admin, string email)
     {
-        var response = await admin.GetAsync("/api/admin/teachers?status=Pending&pageSize=100");
+        var response = await admin.GetAsync("/api/admin/teachers?status=Pending&limit=100");
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<PagedTeachers>(JsonDefaults.Options);
         var match = body!.Items.First(t => t.Email == email);

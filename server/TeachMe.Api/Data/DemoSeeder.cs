@@ -11,8 +11,10 @@ public readonly record struct DemoSeedSummary(int Teachers, int Students, int Le
 /// <summary>
 /// `dotnet run -- seed --demo` — drop, migrate, and seed one known, staggered dataset,
 /// so a broken database on demo day is a thirty-second fix, not an improvisation. The named
-/// accounts below are the scripted walkthrough; a generated cohort of tens of teachers,
-/// students, lessons and marks sits behind them so every screen is seen at a realistic size.
+/// accounts below are the scripted walkthrough; a generated cohort of sixty-odd teachers, a
+/// hundred and fifty students, and the lessons and marks between them sits behind those, so
+/// every screen is seen at a size it will really be — and so every list is long enough that
+/// its cursor scroll (`Common/CursorPage.cs`) is exercised rather than merely present.
 /// </summary>
 public static class DemoSeeder
 {
@@ -24,7 +26,10 @@ public static class DemoSeeder
         var now = clock.GetUtcNow();
         var hasher = new PasswordHasher<User>();
 
-        User MakeUser(string email, string fullName, UserRole role)
+        // `passwordHash` is for the generated cohort, which all shares one hash. PBKDF2 is
+        // deliberately slow, and hashing the same "Demo1234" two hundred times over — only to
+        // overwrite each result a line later — put seconds on every reseed for nothing.
+        User MakeUser(string email, string fullName, UserRole role, string? passwordHash = null)
         {
             var u = new User
             {
@@ -34,7 +39,7 @@ public static class DemoSeeder
                 Role = role,
                 CreatedAtUtc = now
             };
-            u.PasswordHash = hasher.HashPassword(u, "Demo1234");
+            u.PasswordHash = passwordHash ?? hasher.HashPassword(u, "Demo1234");
             return u;
         }
 
@@ -220,31 +225,40 @@ public static class DemoSeeder
         // hashing the same "Demo1234" sixty times over would add seconds to every reseed.
         var sharedHash = hasher.HashPassword(admin, "Demo1234");
 
+        // NextName draws at random and retries on a collision, so the pool has to be much larger
+        // than the cohort or the last few names cost hundreds of throws each. Forty by thirty-two
+        // is 1,280 pairs for the ~210 people below — a collision is rare and never a stall.
         string[] firstNames =
         [
             "Amir", "Hana", "Mostafa", "Layla", "Tamer", "Dina", "Ziad", "Farida", "Hassan", "Mariam",
-            "Sherif", "Yasmin", "Adham", "Rana", "Kareem", "Nada", "Bassem", "Sara", "Marwan", "Habiba"
+            "Sherif", "Yasmin", "Adham", "Rana", "Kareem", "Nada", "Bassem", "Sara", "Marwan", "Habiba",
+            "Omar", "Malak", "Seif", "Nourhan", "Ahmed", "Aya", "Khaled", "Menna", "Mahmoud", "Salma",
+            "Youssef", "Jana", "Ali", "Rowan", "Ibrahim", "Tia", "Mazen", "Lina", "Hesham", "Zeina"
         ];
         string[] lastNames =
         [
             "Ibrahim", "Mahmoud", "Shaker", "Fathy", "Zaki", "Hegazy", "Roshdy", "Mansour",
-            "Selim", "Gaber", "Kamel", "Sabry", "Riad", "Hafez", "Bakr", "Lotfy"
+            "Selim", "Gaber", "Kamel", "Sabry", "Riad", "Hafez", "Bakr", "Lotfy",
+            "Nassar", "Sharaf", "Attia", "Ramzy", "Sultan", "Fahmy", "Wahba", "Ezzat",
+            "Anwar", "Rashad", "Tawfik", "Sadek", "Helmy", "Naguib", "Baz", "Qassem"
         ];
         string[] subjects =
         [
             "Mathematics", "Physics", "Chemistry", "Biology",
             "History", "Geography", "English Literature", "Computer Science"
         ];
+        // Twelve titles a subject, because a course now runs to twelve lessons and the title is
+        // picked by position: a shorter list would wrap and put "Number Sense" in the course twice.
         var syllabus = new Dictionary<string, string[]>
         {
-            ["Mathematics"] = ["Number Sense", "Working with Fractions", "Ratio and Proportion", "Intro to Geometry", "Trigonometry Basics", "Probability"],
-            ["Physics"] = ["Motion and Speed", "Forces at Work", "Energy and Power", "Waves and Sound", "Light and Optics", "Electric Circuits"],
-            ["Chemistry"] = ["States of Matter", "The Periodic Table", "Chemical Bonding", "Acids and Bases", "Reaction Rates", "Organic Chemistry"],
-            ["Biology"] = ["The Human Cell", "Digestion", "Respiration", "Heredity", "Evolution", "Human Body Systems"],
-            ["History"] = ["Ancient Egypt", "The Classical World", "The Middle Ages", "Age of Revolutions", "The World Wars", "The Modern Era"],
-            ["Geography"] = ["Reading a Map", "Rivers and Deltas", "Climate Zones", "Population and Cities", "Natural Resources", "Fieldwork Methods"],
-            ["English Literature"] = ["Close Reading", "Poetry and Form", "Shakespeare in Context", "The Modern Novel", "Writing an Essay", "Drama on the Page"],
-            ["Computer Science"] = ["How Computers Think", "Variables and Loops", "Working with Data", "Algorithms", "Databases", "The Web"]
+            ["Mathematics"] = ["Number Sense", "Working with Fractions", "Ratio and Proportion", "Intro to Geometry", "Trigonometry Basics", "Probability", "Algebraic Expressions", "Solving Equations", "Straight-Line Graphs", "Area and Volume", "Sequences", "Statistics and Averages"],
+            ["Physics"] = ["Motion and Speed", "Forces at Work", "Energy and Power", "Waves and Sound", "Light and Optics", "Electric Circuits", "Magnetism", "Pressure and Density", "Heat Transfer", "Momentum", "Radioactivity", "The Solar System"],
+            ["Chemistry"] = ["States of Matter", "The Periodic Table", "Chemical Bonding", "Acids and Bases", "Reaction Rates", "Organic Chemistry", "Atomic Structure", "Mixtures and Separation", "Moles and Masses", "Electrolysis", "Energy in Reactions", "Chemistry of the Air"],
+            ["Biology"] = ["The Human Cell", "Digestion", "Respiration", "Heredity", "Evolution", "Human Body Systems", "Photosynthesis", "Enzymes", "The Nervous System", "Disease and Immunity", "Ecosystems", "Biotechnology"],
+            ["History"] = ["Ancient Egypt", "The Classical World", "The Middle Ages", "Age of Revolutions", "The World Wars", "The Modern Era", "Trade and Empire", "The Industrial Age", "Nationalism", "The Cold War", "Decolonisation", "Reading a Source"],
+            ["Geography"] = ["Reading a Map", "Rivers and Deltas", "Climate Zones", "Population and Cities", "Natural Resources", "Fieldwork Methods", "Plate Tectonics", "Coasts and Erosion", "Weather Systems", "Farming and Food", "Development", "Sustainability"],
+            ["English Literature"] = ["Close Reading", "Poetry and Form", "Shakespeare in Context", "The Modern Novel", "Writing an Essay", "Drama on the Page", "Narrative Voice", "Imagery and Metaphor", "The Short Story", "Character and Motive", "Comparing Texts", "Editing Your Own Work"],
+            ["Computer Science"] = ["How Computers Think", "Variables and Loops", "Working with Data", "Algorithms", "Databases", "The Web", "Functions", "Lists and Dictionaries", "Files and Input", "Sorting and Searching", "Testing and Debugging", "Networks and Security"]
         };
         string[] bios =
         [
@@ -279,18 +293,19 @@ public static class DemoSeeder
             return code;
         }
 
-        // Twenty more teachers: twelve teaching, five still waiting on a decision, three turned
-        // away — enough that the approvals queue is a queue and not a single row.
+        // Sixty more teachers: thirty-six teaching, fourteen still waiting on a decision, ten
+        // turned away. Every list they land on is then longer than one slice — the directory runs
+        // to thirty-eight courses and the approvals queue to fifteen — so the scroll is something
+        // the demo actually does rather than a mechanism you have to be told is there.
         var bulkTeachers = new List<Teacher>();
         var bulkLessons = new List<Lesson>();
-        for (var i = 1; i <= 20; i++)
+        for (var i = 1; i <= 60; i++)
         {
-            var status = i <= 12 ? TeacherStatus.Approved
-                : i <= 17 ? TeacherStatus.Pending
+            var status = i <= 36 ? TeacherStatus.Approved
+                : i <= 50 ? TeacherStatus.Pending
                 : TeacherStatus.Rejected;
 
-            var user = MakeUser($"teacher{i:00}@demo.test", NextName(), UserRole.Teacher);
-            user.PasswordHash = sharedHash;
+            var user = MakeUser($"teacher{i:00}@demo.test", NextName(), UserRole.Teacher, sharedHash);
             user.CreatedAtUtc = now.AddDays(-rng.Next(20, 120));
             db.Users.Add(user);
 
@@ -314,12 +329,19 @@ public static class DemoSeeder
             }
 
             var titles = syllabus[subject];
-            var lessonCount = 4 + rng.Next(0, 3);
+            // Six to twelve: a short course still fits one slice, a full one does not, so both
+            // shapes are on screen somewhere in the demo.
+            var lessonCount = 6 + rng.Next(0, 7);
             for (var order = 1; order <= lessonCount; order++)
             {
-                // Each course is walked from a fortnight ago into next week, so at any moment
-                // some lessons are open, one is opening about now, and the tail is still shut.
-                var opensAt = now.AddDays(-14 + (order * 4) + rng.Next(-1, 2)).AddHours(rng.Next(0, 9));
+                // Each course is walked from its own start into next week, so at any moment most
+                // of it is open, one lesson is opening about now, and the last two are still
+                // shut. The window is measured from the *length* of the course rather than from
+                // a fixed fortnight: at four lessons those were the same thing, but a twelve
+                // lesson course pinned to a fortnight would have three quarters of it in the
+                // future, and every progress bar in the demo would read "2 of 12".
+                var opensAt = now.AddDays((-4 * (lessonCount - 2)) + (order * 4) + rng.Next(-1, 2))
+                    .AddHours(rng.Next(0, 9));
                 var withQuiz = order % 4 != 0;
                 var withAnswers = withQuiz && order % 3 != 0;
                 var quizOpensAt = opensAt.AddHours(rng.Next(1, 49));
@@ -352,15 +374,16 @@ public static class DemoSeeder
             .GroupBy(l => l.TeacherUserId)
             .ToDictionary(g => g.Key, g => g.ToList());
 
-        // Forty more students, each on one to three courses and most with marks behind them,
-        // so a class list scrolls and a progress table has a spread to read.
+        // A hundred and fifty more students, each on one to three courses and most with marks
+        // behind them, so a class list is a roll and a progress table has a spread to read. With
+        // three in five put on one of the two teachers the demo signs in as, those two rosters
+        // run to roughly forty-five each — long enough that scrolling one is the point.
         var bulkEnrollments = new List<Enrollment>();
         var bulkMarks = new List<Mark>();
-        for (var i = 1; i <= 40; i++)
+        for (var i = 1; i <= 150; i++)
         {
             var name = NextName();
-            var user = MakeUser($"student{i:00}@demo.test", name, UserRole.Student);
-            user.PasswordHash = sharedHash;
+            var user = MakeUser($"student{i:00}@demo.test", name, UserRole.Student, sharedHash);
             user.CreatedAtUtc = now.AddDays(-rng.Next(5, 90));
             db.Users.Add(user);
 

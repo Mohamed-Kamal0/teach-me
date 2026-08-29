@@ -2,7 +2,7 @@ namespace TeachMe.Api.Features.Teacher;
 
 public record StudentSummaryDto(Guid UserId, string FullName, string Email, DateTimeOffset JoinedAtUtc, string? PhotoETag);
 
-public record TeacherStudentsResponse(string JoinCode, PagedResult<StudentSummaryDto> Students);
+public record TeacherStudentsResponse(string JoinCode, CursorPage<StudentSummaryDto> Students);
 
 public record LessonMarkDto(
     Guid LessonId, string LessonTitle, int OrderIndex, int QuizMaxScore, int PassMark,

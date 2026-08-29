@@ -6,8 +6,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatIconModule } from '@angular/material/icon';
 import { StatePanelComponent } from '../../shared/state-panel.component';
+import { ScrollMoreComponent } from '../../shared/scroll-more.component';
 import { AvatarComponent } from '../../shared/avatar.component';
-import { PagedResult, ProblemDetails, TeacherStatus, TeacherSummary } from '../../core/models';
+import { CursorPage, TeacherStatus, TeacherSummary } from '../../core/models';
+import { CursorList } from '../../core/cursor-list';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
 import { NotifyService } from '../../core/notify.service';
 
@@ -16,7 +18,7 @@ import { NotifyService } from '../../core/notify.service';
   standalone: true,
   imports: [
     DatePipe, MatTableModule, MatButtonModule, MatButtonToggleModule, MatIconModule, StatePanelComponent,
-    AvatarComponent
+    ScrollMoreComponent, AvatarComponent
   ],
   template: `
     <div class="page-head">
@@ -34,11 +36,11 @@ import { NotifyService } from '../../core/notify.service';
       </div>
     </div>
 
-    <app-state-panel [loading]="loading()" [error]="error()" [empty]="(rows()?.length ?? 0) === 0"
-      emptyIcon="how_to_reg" (retry)="load()"
+    <app-state-panel [loading]="list.loading()" [error]="list.error()" [empty]="list.rows().length === 0"
+      emptyIcon="how_to_reg" (retry)="list.start()"
       [emptyMessage]="status() === 'Pending' ? 'Nobody is waiting right now.' : 'No teachers in this state yet.'">
       <div class="table-wrap">
-        <table mat-table [dataSource]="rows() ?? []" class="data-table">
+        <table mat-table [dataSource]="list.rows()" class="data-table">
           <ng-container matColumnDef="fullName">
             <th mat-header-cell *matHeaderCellDef>Name</th>
             <td mat-cell *matCellDef="let row" data-label="Name" class="cell-name">
@@ -92,6 +94,9 @@ import { NotifyService } from '../../core/notify.service';
           <tr mat-row *matRowDef="let row; columns: columns;"></tr>
         </table>
       </div>
+
+      <app-scroll-more [busy]="list.loadingMore()" [hasMore]="list.hasMore()"
+        [error]="list.moreError()" (more)="list.more()"></app-scroll-more>
     </app-state-panel>
   `,
   styles: [`
@@ -109,31 +114,26 @@ import { NotifyService } from '../../core/notify.service';
 export class ApprovalsComponent implements OnInit {
   columns = ['fullName', 'subject', 'phone', 'email', 'createdAtUtc', 'actions'];
   status = signal<TeacherStatus>('Pending');
-  loading = signal(true);
-  error = signal<ProblemDetails | null>(null);
-  rows = signal<TeacherSummary[] | null>(null);
   /** The teacher whose decision is in flight, so their two buttons can't be pressed twice. */
   deciding = signal<string | null>(null);
 
   private http = inject(HttpClient);
   private notify = inject(NotifyService);
 
+  readonly list = new CursorList<TeacherSummary>((cursor, limit) => {
+    const params = new URLSearchParams({ status: this.status(), limit: String(limit) });
+    if (cursor) params.set('cursor', cursor);
+    return this.http.get<CursorPage<TeacherSummary>>(`/api/admin/teachers?${params}`);
+  });
+
   ngOnInit(): void {
-    this.load();
+    this.list.start();
   }
 
+  /** Another tab is another list, so it starts from the top rather than re-reading this one. */
   setStatus(status: TeacherStatus): void {
     this.status.set(status);
-    this.load();
-  }
-
-  load(): void {
-    this.loading.set(true);
-    this.error.set(null);
-    this.http.get<PagedResult<TeacherSummary>>(`/api/admin/teachers?status=${this.status()}&pageSize=100`).subscribe({
-      next: (res) => { this.rows.set(res.items); this.loading.set(false); },
-      error: (err) => { this.error.set(problemFrom(err)); this.loading.set(false); }
-    });
+    this.list.start();
   }
 
   decide(row: TeacherSummary, action: 'approve' | 'reject'): void {
@@ -143,7 +143,9 @@ export class ApprovalsComponent implements OnInit {
         this.deciding.set(null);
         // The row leaves the Pending list on success, so the toast is the only trace of what happened.
         this.notify.success(action === 'approve' ? `Approved ${row.fullName}.` : `Turned ${row.fullName} away.`);
-        this.load();
+        // The row leaves this tab, so what is on screen is re-read at its current length — an
+        // administrator working down a queue keeps their place in it.
+        this.list.refresh();
       },
       error: (err) => {
         this.deciding.set(null);

@@ -15,7 +15,7 @@ public class OwnershipIsolationTests : IClassFixture<ApiFactory>
 
     private async Task<Guid> ApproveAsync(HttpClient admin, string email)
     {
-        var response = await admin.GetAsync("/api/admin/teachers?status=Pending&pageSize=200");
+        var response = await admin.GetAsync("/api/admin/teachers?status=Pending&limit=200");
         var pending = await response.Content.ReadFromJsonAsync<PagedTeachers>(JsonDefaults.Options);
         // Registration normalises email to lowercase — match the same way here.
         var userId = pending!.Items.First(t => string.Equals(t.Email, email, StringComparison.OrdinalIgnoreCase)).UserId;
@@ -101,10 +101,10 @@ public class OwnershipIsolationTests : IClassFixture<ApiFactory>
         var otherFirst = await CreateLessonAsync(teacherB, "B first", 1);
 
         // The list is ordered by OrderIndex, so the three come back in the order they were given.
-        var mine = await teacherA.GetFromJsonAsync<PagedLessons>("/api/teacher/lessons?pageSize=100", JsonDefaults.Options);
+        var mine = await teacherA.GetFromJsonAsync<PagedLessons>("/api/teacher/lessons?limit=100", JsonDefaults.Options);
         Assert.Equal([first, second, third], mine!.Items.Select(l => l.Id).ToList());
 
-        var theirs = await teacherB.GetFromJsonAsync<PagedLessons>("/api/teacher/lessons?pageSize=100", JsonDefaults.Options);
+        var theirs = await teacherB.GetFromJsonAsync<PagedLessons>("/api/teacher/lessons?limit=100", JsonDefaults.Options);
         Assert.Equal([otherFirst], theirs!.Items.Select(l => l.Id).ToList());
     }
 

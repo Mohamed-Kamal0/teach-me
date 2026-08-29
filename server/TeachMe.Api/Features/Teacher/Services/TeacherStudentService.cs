@@ -2,34 +2,53 @@ namespace TeachMe.Api.Features.Teacher.Services;
 
 public interface ITeacherStudentService
 {
-    Task<TeacherStudentsResponse> ListAsync(int? page, int? pageSize, CancellationToken ct);
+    Task<TeacherStudentsResponse> ListAsync(string? cursor, int? limit, CancellationToken ct);
     Task<StudentProfileDto> GetProfileAsync(Guid studentId, CancellationToken ct);
 }
 
 public class TeacherStudentService(AppDbContext db, ICurrentUser currentUser) : ITeacherStudentService
 {
-    public async Task<TeacherStudentsResponse> ListAsync(int? page, int? pageSize, CancellationToken ct)
+    /// <summary>
+    /// The roster, a slice at a time, in the order <see cref="RosterQueries"/> fixes. The join
+    /// code rides along on every slice rather than only the first: it is the one thing on the
+    /// screen that is not a row, and re-sending a six-character string costs less than the
+    /// branch that would avoid it.
+    /// </summary>
+    public async Task<TeacherStudentsResponse> ListAsync(string? cursor, int? limit, CancellationToken ct)
     {
         var teacherId = currentUser.UserId;
-        var (p, ps) = PagingExtensions.Normalize(page, pageSize);
+        var take = Cursor.NormalizeLimit(limit);
+        var key = Cursor.Read(cursor, RosterQueries.CursorFields);
 
         var joinCode = await db.Teachers.Where(t => t.UserId == teacherId).Select(t => t.JoinCode).FirstAsync(ct);
 
-        var query = db.Enrollments
-            .Where(e => e.TeacherUserId == teacherId)
-            .OrderBy(e => e.Student.User.FullName);
+        var enrollments = db.Enrollments.Where(e => e.TeacherUserId == teacherId);
 
-        var total = await query.CountAsync(ct);
-        var items = await query
-            .Skip((p - 1) * ps).Take(ps)
+        int? total = key is null ? await enrollments.CountAsync(ct) : null;
+
+        // One row past the slice: present means there is more to fetch, and it is dropped
+        // before anything is sent.
+        var rows = await enrollments
+            .RosterPage(key)
+            .Take(take + 1)
             .Select(e => new StudentSummaryDto(
                 e.StudentUserId, e.Student.User.FullName, e.Student.User.Email, e.JoinedAtUtc,
                 db.Avatars.Where(a => a.UserId == e.StudentUserId).Select(a => a.ETag).FirstOrDefault()))
             .ToListAsync(ct);
 
+        var hasMore = rows.Count > take;
+        var items = hasMore ? rows[..take] : rows;
+
         return new TeacherStudentsResponse(
             joinCode,
-            new PagedResult<StudentSummaryDto> { Items = items, Page = p, PageSize = ps, Total = total });
+            new CursorPage<StudentSummaryDto>
+            {
+                Items = items,
+                NextCursor = hasMore && items.Count > 0
+                    ? RosterQueries.RosterCursor(items[^1].FullName, items[^1].UserId)
+                    : null,
+                Total = total
+            });
     }
 
     /// <summary>

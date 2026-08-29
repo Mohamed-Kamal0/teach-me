@@ -14,9 +14,9 @@ public class CoursesController(ICourseService courses) : ControllerBase
 
     [HttpGet("{teacherId:guid}/lessons")]
     [Authorize(Policy = PolicyNames.EnrolledInCourse)]
-    public async Task<ActionResult<PagedResult<StudentLessonWithMarkDto>>> Lessons(
-        Guid teacherId, [FromQuery] int? page, [FromQuery] int? pageSize, CancellationToken ct) =>
-        Ok(await courses.GetLessonsAsync(teacherId, page, pageSize, ct));
+    public async Task<ActionResult<CursorPage<StudentLessonWithMarkDto>>> Lessons(
+        Guid teacherId, [FromQuery] string? cursor, [FromQuery] int? limit, CancellationToken ct) =>
+        Ok(await courses.GetLessonsAsync(teacherId, cursor, limit, ct));
 
     [HttpGet("{teacherId:guid}/lessons/{id:guid}")]
     [Authorize(Policy = PolicyNames.EnrolledInCourse)]

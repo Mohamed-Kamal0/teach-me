@@ -25,11 +25,15 @@ export interface LoginResponse {
   teacherStatus: TeacherStatus | null;
 }
 
-export interface PagedResult<T> {
+/**
+ * One slice of a list, and the key that asks for the slice after it. `nextCursor` is null when
+ * the slice was the last one, and `total` arrives with the first slice only — the walk already
+ * knows how many there are by the time it asks for the second.
+ */
+export interface CursorPage<T> {
   items: T[];
-  page: number;
-  pageSize: number;
-  total: number;
+  nextCursor: string | null;
+  total: number | null;
 }
 
 export interface ProblemDetails {
@@ -126,7 +130,7 @@ export interface StudentSummary {
 
 export interface TeacherStudentsResponse {
   joinCode: string;
-  students: PagedResult<StudentSummary>;
+  students: CursorPage<StudentSummary>;
 }
 
 export interface LessonMark {

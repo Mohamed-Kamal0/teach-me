@@ -20,7 +20,7 @@ Every feature below is written to the same shape, so you can read one without re
 
 ## Contents
 
-- [0. Seven mechanisms every feature uses](#0-seven-mechanisms-every-feature-uses)
+- [0. Eight mechanisms every feature uses](#0-eight-mechanisms-every-feature-uses)
 - [1. Getting in](#1-getting-in) — register · sign in · the session · sign out · resetting your password
 - [2. The administrator](#2-the-administrator) — approving and refusing teachers
 - [3. The teacher](#3-the-teacher) — standing · lessons · moments · order · students · marks · progress
@@ -32,7 +32,7 @@ Every feature below is written to the same shape, so you can read one without re
 
 ---
 
-## 0. Seven mechanisms every feature uses
+## 0. Eight mechanisms every feature uses
 
 Read these once and the rest of the file gets shorter. Each is built in **one place**, so no feature
 can implement it slightly differently.
@@ -333,6 +333,51 @@ Three details are deliberate:
   is checking for.
 
 A password box you cannot read is how a typo becomes *"Email or password is incorrect."*
+
+### 0.8 Every list scrolls, and it scrolls by cursor
+
+No screen in the app has a pager. Every list — the directory, the roster, a course, the approvals
+queue — hands back one slice and a **cursor**, and asks for the next when the reader nears the foot
+of what they have. Two pieces do it everywhere: `Common/CursorPage.cs` on the server and
+`core/cursor-list.ts` with `shared/scroll-more.component.ts` on the client.
+
+**Why keyset and not `OFFSET`.** These lists are read while they are being written to — a student
+joins, an administrator approves someone, a teacher opens a lesson. `OFFSET` answers a moving list
+by skipping a *count* of rows, so a row that moved up is served twice and a row that moved down is
+never served at all. The cursor names **the last row handed out**, so the next request resumes from
+a row rather than from a number. Approving the tenth teacher in the queue cannot push the eleventh
+past a boundary unseen.
+
+**The wire.** `?cursor=&limit=` in, `{ items, nextCursor, total }` out. `limit` defaults to 20 and
+is capped at 100. `nextCursor` is null on the last slice; `total` is sent with the **first** slice
+only, because a caller walking a list already has the number from the request that started the walk.
+The cursor itself is the sort key of the last row, base64url'd — opaque, not secret, and not signed:
+everything in it is a value the caller was just sent. One we did not issue is a **400**, never a
+silent restart from the top, because a caller quietly served slice one again would loop forever.
+
+**One row past the slice.** Each query takes `limit + 1` and drops the extra. That is how "is there
+more" is answered without a second count.
+
+**The tripwire.** `<app-scroll-more>` puts a 1px sentinel 600px *below* the last row and watches it
+with an `IntersectionObserver`, so the next slice is already in flight by the time the reader
+reaches the bottom. The observer is torn down and rebuilt every time a slice settles — an observer
+reports a *change* in intersection, and on a short list the sentinel never leaves the viewport, so a
+fresh one is what keeps the list filling until it is taller than the screen or out of rows.
+
+**Two errors, not one.** A failed **first** slice takes over the whole panel (§0.5) — there is
+nothing else to show. A failed **later** slice does not: the rows already on screen are still true,
+and taking them away would lose the reader's place over a failure that cost them nothing. It grows a
+"Try again" at the foot instead.
+
+**Refreshing without losing your place.** When something changes a row — a lesson deleted, a teacher
+approved — the list re-reads *as many rows as are showing*, in one request, rather than restarting
+at slice one. An administrator working down a queue stays where they were.
+
+**Proved by:** `PublicDirectoryTests` walks the directory one row at a time and asserts the walk
+visits every teacher exactly once and in the same order as a single request, that `total` arrives on
+the first slice and not the second, and that an invented cursor is a 400. `LessonOrderTests` does
+the same down a course, across a reorder. `core/cursor-list.spec.ts` pins the client half:
+appending, the stale-response guard, the two error paths, and the refresh length.
 
 ---
 
@@ -669,7 +714,7 @@ em dash, never an empty cell.
 **The calls:**
 
 ```
-GET  /api/admin/teachers?status=Pending&page=1&pageSize=20   → 200 paged, name asc
+GET  /api/admin/teachers?status=Pending&cursor=&limit=20     → 200 one slice, name asc
 POST /api/admin/teachers/{id}/approve                        → 204
 POST /api/admin/teachers/{id}/reject                         → 204
 ```
@@ -725,7 +770,7 @@ rehearsal of the student's screen; beside each link it says the moment a student
 **The calls:**
 
 ```
-GET    /api/teacher/lessons            → 200 paged, OrderIndex asc
+GET    /api/teacher/lessons            → 200 one slice, OrderIndex asc
 GET    /api/teacher/lessons/{id}       → 200
 POST   /api/teacher/lessons            → 201
 PUT    /api/teacher/lessons/{id}       → 200
@@ -815,17 +860,24 @@ foot of the form: a cross-field rule has no property of its own, so it is told w
 ### 3.4 Reordering
 
 **Who:** approved teachers.
-**The call:** `PUT /api/teacher/lessons/order` with the full list of lesson ids in their new order →
-**204**.
+**The call:** `PUT /api/teacher/lessons/{id}/move` with `{ up: true | false }` → **204**.
 
 **Why a separate endpoint at all.** The unique index on (`TeacherUserId`, `OrderIndex`) is what makes
-L3 a 400 — but it also makes renumbering impossible one row at a time. Inserting a lesson between 2
-and 3 means pushing 3, 4, 5 down, and **SQLite checks a unique index per statement, not at commit**,
-so every intermediate state violates it and each individual `UPDATE` fails, transaction or not.
+L3 a 400 — but it also makes renumbering impossible one row at a time. **SQLite checks a unique index
+per statement, not at commit**, so a straight swap violates it between the two `UPDATE`s and the
+first one fails, transaction or not.
 
-**The two-phase renumber**, in one transaction: first write every lesson to
-`OrderIndex = -(newIndex)` — a scratch range that cannot collide with any positive value — then flip
-the whole block positive. Two passes, one transaction, no intermediate collision.
+**Why a step and not an ordering.** The endpoint used to take the whole ordered list of lesson ids.
+That was a contract the screen could no longer honour once the table started scrolling by cursor
+(§0.8): a teacher part-way down a sixty-lesson course knows the ten lessons in front of them, not
+all sixty. It names the lesson and which way it went, and the server finds the neighbour — which it
+can do whether or not that neighbour has ever been fetched.
+
+**The swap**, in one transaction: the moving lesson parks on `-OrderIndex` — a range nothing else
+uses — the neighbour takes the position it vacated, and the moving lesson lands on the neighbour's.
+Three writes, one transaction, no intermediate collision and no reader ever sees the parked value.
+A lesson already at the end has no neighbour, which is **204 and nothing done**, not an error: the
+arrow was drawn disabled, and a keyboard or a stale second tab can still press it.
 
 **When it fails:** **400** *"That list doesn't match your lessons — reload and try again."* when the
 posted ids contain a duplicate, a foreign id, or are not exactly the set the teacher owns.
@@ -862,7 +914,9 @@ directly would collide the moment lesson 4 tried to become lesson 2 while lesson
 each row an avatar plus name, email and joined-at. **The joining code is on the page with a copy
 button.** No students yet says so *and says how somebody joins*.
 
-**The call:** `GET /api/teacher/students` → **200** `{ joinCode, students: PagedResult<…> }`
+**The call:** `GET /api/teacher/students` → **200** `{ joinCode, students: CursorPage<…> }` —
+the code rides along on every slice rather than only the first, because re-sending six
+characters costs less than the branch that would avoid it.
 
 **The server:** the list is `Enrollments` where `TeacherUserId == CurrentUser.UserId`. The code comes
 from the caller's own `Teacher` row, so it is impossible to serve someone else's.
@@ -957,7 +1011,8 @@ a client being ignored.
 **worked out from the marks themselves**: marked / total lessons, passed, failed. A teacher with no
 marks yet **reads zero** — it does not vanish and it does not spin forever.
 
-**The call:** `GET /api/teacher/progress` → **200** paged, name ascending.
+**The call:** `GET /api/teacher/progress` → **200** one slice, name ascending — the same order
+`RosterQueries` fixes for §3.5, so a cursor means the same thing on both screens.
 
 **The server:** `totalLessons` is the caller's own lesson count; the marks are joined by
 `m.Lesson.TeacherUserId == teacherId` so nothing from another course can be counted. Photos are
@@ -1091,7 +1146,7 @@ and the answers **only once their moments have passed**, and the student's own m
 **The calls:**
 
 ```
-GET  /api/student/courses/{teacherId}/lessons        → 200 paged, open lessons only
+GET  /api/student/courses/{teacherId}/lessons        → 200 one slice, open lessons only
 GET  /api/student/courses/{teacherId}/lessons/{id}   → 200
 POST /api/student/courses/{teacherId}/seen           → 204
 ```
@@ -1329,7 +1384,9 @@ subject they teach**, **a phone number to ask on**, when they joined, and that c
 search box over the lot. The page is named for what somebody does on it rather than for the rows it
 holds — a visitor arrives looking for a course to take, not for a list of staff. `/teachers`, the
 name it had before, **redirects to it**, so an existing bookmark still lands on the page.
-**The call:** `GET /api/public/teachers?page=&pageSize=&q=` → **200** paged
+**The call:** `GET /api/public/teachers?cursor=&limit=&q=` → **200** one slice (§0.8). There is
+no pager: a visitor browsing courses is looking, not filing, and "page 3 of 7" asks them to keep
+a place they never wanted to keep — the cards carry on as they scroll.
 
 **Rule 1 — a separate DTO, never a reused one.** `PublicTeacherDto` exists so that a field added later
 to the admin screen's `TeacherSummaryDto` — **which already carries `Email`** — cannot arrive on an
@@ -1376,7 +1433,7 @@ teachers = teachers.Where(t =>
   placeholder.
 
 The box appears as soon as there is **more than one teacher** to tell apart. It used to wait for a
-second page of cards, on the grounds that a search over six cards is furniture; that reasoning was
+second screenful of cards, on the grounds that a search over six cards is furniture; that reasoning was
 about names, and "who teaches chemistry" is a real question over six cards where "which of these six
 is called Amina" was not. Typing is debounced 250ms; **clear is not**, because pressing clear is not
 typing and the box is already empty by the time the request would have fired.
@@ -1574,26 +1631,26 @@ answers **401** signed out. Every non-`GET` additionally answers **400** without
 | `DELETE /api/me/photo`                              | any signed-in      | 204 (idempotent)                               | —                                                           | 6.3  |
 | `GET /api/users/{userId}/photo`                     | any signed-in      | 200 webp, `private, max-age=300` · 304         | 404 no photo                                                | 6.3  |
 | `GET /api/public/home`                              | anyone, no cookie  | 200 `{counts, howToJoin}`                      | — reads `0` on an empty database                            | 6.1  |
-| `GET /api/public/teachers`                          | anyone, no cookie  | 200 paged, approved only, incl. `phone`; `?q=` **name or subject** | — legitimately empty                    | 6.2  |
+| `GET /api/public/teachers?cursor=&limit=&q=`        | anyone, no cookie  | 200 one slice, approved only, incl. `phone`; `?q=` **name or subject** | 400 invented cursor · — legitimately empty | 6.2 |
 | `GET /api/public/teachers/{userId}/photo`           | anyone, no cookie  | 200 webp, `public, max-age=300` · 304          | **404** for "no photo" **and** "not approved", identically  | 6.3  |
 | `GET /api/health`                                   | anyone, no cookie  | 200 `{status, db}`                             | 503 database unreachable                                    | 6.4  |
-| `GET /api/admin/teachers?status=`                   | Admin              | 200 paged, name asc                            | 403                                                         | 2.1  |
+| `GET /api/admin/teachers?status=&cursor=&limit=`    | Admin              | 200 one slice, name asc                        | 400 invented cursor, 403                                    | 2.1  |
 | `POST /api/admin/teachers/{id}/approve`             | Admin              | 204                                            | 403, 404, **409 already decided**                           | 2.1  |
 | `POST /api/admin/teachers/{id}/reject`              | Admin              | 204                                            | 403, 404, **409 already decided**                           | 2.1  |
-| `GET /api/teacher/lessons`                          | Teacher · Approved | 200 paged, `OrderIndex` asc                    | 403 pending / turned away                                   | 3.2  |
+| `GET /api/teacher/lessons?cursor=&limit=`           | Teacher · Approved | 200 one slice, `OrderIndex` asc                | 400 invented cursor, 403 pending / turned away              | 3.2  |
 | `POST /api/teacher/lessons`                         | Teacher · Approved | 201                                            | 400 L1–L12, 403                                             | 3.2–3.3 |
 | `GET` `PUT /api/teacher/lessons/{id}`               | Teacher · Approved | 200                                            | 400 L1–L12, **404 not theirs**, 403                         | 3.2  |
-| `PUT /api/teacher/lessons/order`                    | Teacher · Approved | 204 — two-phase renumber, one transaction      | 400 list mismatch, 403                                      | 3.4  |
+| `PUT /api/teacher/lessons/{id}/move`                | Teacher · Approved | 204 — swap through a parked index, one transaction | **404 not theirs**, 403                                 | 3.4  |
 | `DELETE /api/teacher/lessons/{id}`                  | Teacher · Approved | 204                                            | **409 marks exist**, 404, 403                               | 3.2  |
-| `GET /api/teacher/students`                         | Teacher · Approved | 200 `{joinCode, students}` paged, name asc     | 403                                                         | 3.5  |
+| `GET /api/teacher/students?cursor=&limit=`          | Teacher · Approved | 200 `{joinCode, students}` one slice, name asc | 400 invented cursor, 403                                    | 3.5  |
 | `GET /api/teacher/students/{studentId}`             | Teacher · Approved | 200 profile + marks in lesson order            | **404** unknown or not theirs, 403                          | 3.6  |
 | `POST /api/teacher/marks`                           | Teacher · Approved | 201                                            | 400 out of range, **409 duplicate**, 404 not your student/lesson | 3.7 |
 | `PUT /api/teacher/marks/{id}`                       | Teacher · Approved | 200 + `UpdatedAtUtc`                           | 400, 404, 403                                               | 3.7  |
-| `GET /api/teacher/progress`                         | Teacher · Approved | 200 paged (reads `0`, never spins)             | 403                                                         | 3.8  |
+| `GET /api/teacher/progress?cursor=&limit=`          | Teacher · Approved | 200 one slice (reads `0`, never spins)         | 400 invented cursor, 403                                    | 3.8  |
 | `GET` `PUT /api/student/profile`                    | Student            | 200                                            | 400, 403                                                    | 4.1  |
 | `POST /api/student/enrollments`                     | Student            | 201                                            | 400 unknown code / not approved, **409 already on it**      | 4.2  |
 | `GET /api/student/courses`                          | Student            | 200 (legitimately empty)                       | 403                                                         | 4.3  |
-| `GET /api/student/courses/{teacherId}/lessons`      | Student · Enrolled | 200 paged — **open lessons only**              | **403 not on this course** (never an empty list)            | 4.4  |
+| `GET /api/student/courses/{teacherId}/lessons`      | Student · Enrolled | 200 one slice — **open lessons only**          | **403 not on this course** (never an empty list)            | 4.4  |
 | `GET /api/student/courses/{teacherId}/lessons/{id}` | Student · Enrolled | 200                                            | 403 not enrolled, **404 not open yet**                      | 4.4  |
 | `POST /api/student/courses/{teacherId}/seen`        | Student · Enrolled | 204 — stamps **that** `LastViewedAtUtc`        | 403                                                         | 4.5  |
 | `GET /api/student/whats-new`                        | Student            | 200 per-course + total                         | 403                                                         | 4.5  |

@@ -3,6 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router, provideRouter } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { PAGE_SIZE } from '../../core/cursor-list';
 import { StudentsListComponent } from './students-list.component';
 
 /** The row became the link in this component; these two specs pin the part of that which is
@@ -17,8 +18,7 @@ describe('StudentsListComponent', () => {
       items: [
         { userId: 'student-1', fullName: 'Nadia Hassan', email: 'nadia@example.test', joinedAtUtc: '2026-08-12T00:00:00Z', photoETag: null }
       ],
-      page: 1,
-      pageSize: 100,
+      nextCursor: null,
       total: 1
     }
   };
@@ -39,7 +39,7 @@ describe('StudentsListComponent', () => {
   function render() {
     const fixture = TestBed.createComponent(StudentsListComponent);
     fixture.detectChanges();
-    http.expectOne('/api/teacher/students?pageSize=100').flush(response);
+    http.expectOne(`/api/teacher/students?limit=${PAGE_SIZE}`).flush(response);
     fixture.detectChanges();
     return fixture;
   }

@@ -2,19 +2,24 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Router, RouterLink } from '@angular/router';
+import { map, tap } from 'rxjs';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { StatePanelComponent } from '../../shared/state-panel.component';
+import { ScrollMoreComponent } from '../../shared/scroll-more.component';
 import { AvatarComponent } from '../../shared/avatar.component';
-import { ProblemDetails, StudentSummary, TeacherStudentsResponse } from '../../core/models';
-import { problemFrom } from '../../core/interceptors/error.interceptor';
+import { StudentSummary, TeacherStudentsResponse } from '../../core/models';
+import { CursorList } from '../../core/cursor-list';
 import { NotifyService } from '../../core/notify.service';
 
 @Component({
   selector: 'app-students-list',
   standalone: true,
-  imports: [DatePipe, RouterLink, MatTableModule, MatButtonModule, MatIconModule, StatePanelComponent, AvatarComponent],
+  imports: [
+    DatePipe, RouterLink, MatTableModule, MatButtonModule, MatIconModule, StatePanelComponent,
+    ScrollMoreComponent, AvatarComponent
+  ],
   template: `
     <div class="page-head">
       <div class="page-head__text">
@@ -28,12 +33,12 @@ import { NotifyService } from '../../core/notify.service';
       </div>
     </div>
 
-    @if (data(); as d) {
+    @if (joinCode(); as code) {
       <!-- The code a teacher reads out loud, set large enough to read from the back of a room. -->
       <div class="join-code">
         <p class="join-code__row">
-          Your joining code: <strong class="join-code__value tabular-nums">{{ d.joinCode }}</strong>
-          <button mat-icon-button (click)="copyCode(d.joinCode)" aria-label="Copy the joining code">
+          Your joining code: <strong class="join-code__value tabular-nums">{{ code }}</strong>
+          <button mat-icon-button (click)="copyCode(code)" aria-label="Copy the joining code">
             <mat-icon>content_copy</mat-icon>
           </button>
         </p>
@@ -41,11 +46,11 @@ import { NotifyService } from '../../core/notify.service';
       </div>
     }
 
-    <app-state-panel [loading]="loading()" [error]="error()" [empty]="(data()?.students?.items?.length ?? 0) === 0"
-      emptyIcon="group" (retry)="load()"
-      [emptyMessage]="'No students have joined yet. Share your code — ' + (data()?.joinCode ?? '') + ' — and they\\'ll appear here.'">
+    <app-state-panel [loading]="list.loading()" [error]="list.error()" [empty]="list.rows().length === 0"
+      emptyIcon="group" (retry)="list.start()"
+      [emptyMessage]="'No students have joined yet. Share your code — ' + (joinCode() ?? '') + ' — and they\\'ll appear here.'">
       <div class="table-wrap">
-        <table mat-table [dataSource]="data()?.students?.items ?? []" class="data-table">
+        <table mat-table [dataSource]="list.rows()" class="data-table">
           <ng-container matColumnDef="fullName">
             <th mat-header-cell *matHeaderCellDef>Name</th>
             <td mat-cell *matCellDef="let row" data-label="Name" class="cell-name">
@@ -67,6 +72,9 @@ import { NotifyService } from '../../core/notify.service';
           <tr mat-row *matRowDef="let row; columns: columns;" class="row-link" (click)="open(row, $event)"></tr>
         </table>
       </div>
+
+      <app-scroll-more [busy]="list.loadingMore()" [hasMore]="list.hasMore()"
+        [error]="list.moreError()" (more)="list.more()"></app-scroll-more>
     </app-state-panel>
   `,
   styles: [`
@@ -106,25 +114,24 @@ import { NotifyService } from '../../core/notify.service';
 })
 export class StudentsListComponent implements OnInit {
   columns = ['fullName', 'email', 'joinedAtUtc'];
-  loading = signal(true);
-  error = signal<ProblemDetails | null>(null);
-  data = signal<TeacherStudentsResponse | null>(null);
+  /** Not one of the rows, so it does not belong to the list — it rides along on every slice and
+   *  the first one is what fills this in. */
+  joinCode = signal<string | null>(null);
 
   private http = inject(HttpClient);
   private notify = inject(NotifyService);
   private router = inject(Router);
 
-  ngOnInit(): void {
-    this.load();
-  }
+  readonly list = new CursorList<StudentSummary>((cursor, limit) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) params.set('cursor', cursor);
+    return this.http.get<TeacherStudentsResponse>(`/api/teacher/students?${params}`).pipe(
+      tap(res => this.joinCode.set(res.joinCode)),
+      map(res => res.students));
+  });
 
-  load(): void {
-    this.loading.set(true);
-    this.error.set(null);
-    this.http.get<TeacherStudentsResponse>('/api/teacher/students?pageSize=100').subscribe({
-      next: (res) => { this.data.set(res); this.loading.set(false); },
-      error: (err) => { this.error.set(problemFrom(err)); this.loading.set(false); }
-    });
+  ngOnInit(): void {
+    this.list.start();
   }
 
   /** A click that began on something else interactive (the copy button, a future menu) or that

@@ -5,7 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { StatePanelComponent } from '../../shared/state-panel.component';
 import { TeacherCardComponent } from './teacher-card.component';
-import { CourseSummary, HomeResponse, PagedResult, ProblemDetails, PublicTeacher } from '../../core/models';
+import { CourseSummary, CursorPage, HomeResponse, ProblemDetails, PublicTeacher } from '../../core/models';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
 import { AuthService } from '../../core/auth.service';
 
@@ -359,7 +359,7 @@ export class HomeComponent implements OnInit, AfterViewInit, AfterViewChecked, O
   }
 
   private loadTeachers(): void {
-    this.http.get<PagedResult<PublicTeacher>>('/api/public/teachers?page=1&pageSize=3').subscribe({
+    this.http.get<CursorPage<PublicTeacher>>('/api/public/teachers?limit=3').subscribe({
       next: (res) => {
         this.teachers.set(res.items);
       },

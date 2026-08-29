@@ -35,7 +35,7 @@ public class AiHelperTests : IClassFixture<AiApiFactory>
 
         var teacher = await TestAuth.RegisterAndSignInTeacherAsync(factory, teacherEmail, "Amal Hassan");
         var admin = await TestAuth.SignedInAdminAsync(factory);
-        var pending = await (await admin.GetAsync("/api/admin/teachers?status=Pending&pageSize=200"))
+        var pending = await (await admin.GetAsync("/api/admin/teachers?status=Pending&limit=200"))
             .Content.ReadFromJsonAsync<PagedTeachers>(JsonDefaults.Options);
         var teacherUserId = pending!.Items.First(t => t.Email == teacherEmail).UserId;
         await admin.PostAsync($"/api/admin/teachers/{teacherUserId}/approve", null);

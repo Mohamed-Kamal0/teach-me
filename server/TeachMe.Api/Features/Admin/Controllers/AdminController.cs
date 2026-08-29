@@ -9,9 +9,9 @@ namespace TeachMe.Api.Features.Admin.Controllers;
 public class AdminController(ITeacherApprovalService teachers) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<PagedResult<TeacherSummaryDto>>> List(
-        [FromQuery] string? status, [FromQuery] int? page, [FromQuery] int? pageSize, CancellationToken ct) =>
-        Ok(await teachers.ListAsync(status, page, pageSize, ct));
+    public async Task<ActionResult<CursorPage<TeacherSummaryDto>>> List(
+        [FromQuery] string? status, [FromQuery] string? cursor, [FromQuery] int? limit, CancellationToken ct) =>
+        Ok(await teachers.ListAsync(status, cursor, limit, ct));
 
     [HttpPost("{id:guid}/approve")]
     public async Task<IActionResult> Approve(Guid id, CancellationToken ct)

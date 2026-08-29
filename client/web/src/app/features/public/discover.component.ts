@@ -3,15 +3,13 @@ import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Subject, debounceTime } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { StatePanelComponent } from '../../shared/state-panel.component';
+import { ScrollMoreComponent } from '../../shared/scroll-more.component';
 import { TeacherCardComponent } from './teacher-card.component';
 import { AuthService } from '../../core/auth.service';
-import { CourseSummary, PagedResult, ProblemDetails, PublicTeacher } from '../../core/models';
-import { problemFrom } from '../../core/interceptors/error.interceptor';
-
-const PAGE_SIZE = 24;
+import { CourseSummary, CursorPage, PublicTeacher } from '../../core/models';
+import { CursorList } from '../../core/cursor-list';
 
 /**
  * Discover — every course on the platform, and the teacher behind each one. It is the app's first
@@ -26,7 +24,7 @@ const PAGE_SIZE = 24;
   selector: 'app-discover',
   standalone: true,
   imports: [
-    FormsModule, MatButtonModule, MatIconModule, StatePanelComponent, TeacherCardComponent
+    FormsModule, MatIconModule, StatePanelComponent, ScrollMoreComponent, TeacherCardComponent
   ],
   template: `
     <div class="page-head">
@@ -67,25 +65,18 @@ const PAGE_SIZE = 24;
       </div>
     }
 
-    <app-state-panel [loading]="loading()" [error]="error()" [empty]="(rows()?.length ?? 0) === 0"
-      emptyIcon="school" (retry)="load()" [emptyMessage]="emptyMessage()">
+    <!-- No pager. A visitor browsing courses is looking, not filing, and "page 3 of 7" asks them
+         to keep a place they never wanted to keep — the cards simply carry on as they scroll. -->
+    <app-state-panel [loading]="list.loading()" [error]="list.error()" [empty]="list.rows().length === 0"
+      emptyIcon="school" (retry)="list.start()" [emptyMessage]="emptyMessage()">
       <div class="grid">
-        @for (t of rows(); track t.userId) {
+        @for (t of list.rows(); track t.userId) {
           <app-teacher-card [teacher]="t" [enrolled]="enrolledIds().has(t.userId)"></app-teacher-card>
         }
       </div>
 
-      @if (pageCount() > 1) {
-        <nav class="pager" aria-label="Pages of courses">
-          <button mat-stroked-button [disabled]="page() === 1" (click)="goTo(page() - 1)">
-            <mat-icon>chevron_left</mat-icon> Previous
-          </button>
-          <span class="pager__count tabular-nums">Page {{ page() }} of {{ pageCount() }}</span>
-          <button mat-stroked-button [disabled]="page() === pageCount()" (click)="goTo(page() + 1)">
-            Next <mat-icon>chevron_right</mat-icon>
-          </button>
-        </nav>
-      }
+      <app-scroll-more [busy]="list.loadingMore()" [hasMore]="list.hasMore()"
+        [error]="list.moreError()" (more)="list.more()"></app-scroll-more>
     </app-state-panel>
   `,
   styles: [`
@@ -176,23 +167,9 @@ const PAGE_SIZE = 24;
       gap: 1rem;
       align-items: stretch;
     }
-    .pager {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-      margin-top: 1.5rem;
-    }
-    .pager__count { color: var(--muted); font-size: var(--step--1); }
   `]
 })
 export class DiscoverComponent implements OnInit {
-  loading = signal(true);
-  error = signal<ProblemDetails | null>(null);
-  rows = signal<PublicTeacher[] | null>(null);
-  total = signal(0);
-  page = signal(1);
   /** The term the rows on screen were fetched with. */
   query = signal('');
   /** What is in the box right now. It leads `query` by up to the debounce, which is exactly the
@@ -206,30 +183,31 @@ export class DiscoverComponent implements OnInit {
   private http = inject(HttpClient);
   private auth = inject(AuthService);
 
+  readonly list = new CursorList<PublicTeacher>((cursor, limit) => {
+    const params = new URLSearchParams({ limit: String(limit), q: this.query() });
+    if (cursor) params.set('cursor', cursor);
+    return this.http.get<CursorPage<PublicTeacher>>(`/api/public/teachers?${params}`);
+  });
+
   constructor() {
     this.typed.pipe(debounceTime(250), takeUntilDestroyed()).subscribe(value => {
       // A term the button or the Enter key already sent: re-fetching it would answer the same
       // rows twice for one intention.
       if (value === this.query()) return;
       this.query.set(value);
-      this.page.set(1);
-      this.load();
+      this.list.start();
     });
   }
 
   ngOnInit(): void {
-    this.load();
+    this.list.start();
     this.loadEnrolments();
   }
 
   /** True once there is more than one course to tell apart — and always while there is anything
    *  in the box, so a search that matches nothing cannot take the box away with it. */
   searchable(): boolean {
-    return this.total() > 1 || this.draft().length > 0;
-  }
-
-  pageCount(): number {
-    return Math.max(1, Math.ceil(this.total() / PAGE_SIZE));
+    return this.list.total() > 1 || this.draft().length > 0;
   }
 
   emptyMessage(): string {
@@ -249,8 +227,7 @@ export class DiscoverComponent implements OnInit {
   searchNow(): void {
     if (this.draft() === this.query()) return;
     this.query.set(this.draft());
-    this.page.set(1);
-    this.load();
+    this.list.start();
   }
 
   /** The debounce exists to hold off on a request while somebody is still typing. Pressing clear
@@ -261,28 +238,7 @@ export class DiscoverComponent implements OnInit {
     this.typed.next('');
     if (this.query() === '') return;
     this.query.set('');
-    this.page.set(1);
-    this.load();
-  }
-
-  goTo(page: number): void {
-    this.page.set(page);
-    this.load();
-  }
-
-  load(): void {
-    this.loading.set(true);
-    this.error.set(null);
-
-    const params = `page=${this.page()}&pageSize=${PAGE_SIZE}&q=${encodeURIComponent(this.query())}`;
-    this.http.get<PagedResult<PublicTeacher>>(`/api/public/teachers?${params}`).subscribe({
-      next: (res) => {
-        this.rows.set(res.items);
-        this.total.set(res.total);
-        this.loading.set(false);
-      },
-      error: (err) => { this.error.set(problemFrom(err)); this.loading.set(false); }
-    });
+    this.list.start();
   }
 
   /** Only a student can be enrolled, and only this call can say so. If it fails, every card

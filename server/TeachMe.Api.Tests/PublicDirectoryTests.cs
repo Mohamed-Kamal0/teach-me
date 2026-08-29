@@ -42,7 +42,7 @@ public class PublicDirectoryTests : IClassFixture<ApiFactory>
         await RejectAsync(admin, "dir.rejected.f2@test.local");
 
         var anon = _factory.CreateClient();
-        var page = await anon.GetFromJsonAsync<PagedTeachers>("/api/public/teachers?pageSize=100", JsonDefaults.Options);
+        var page = await anon.GetFromJsonAsync<PagedTeachers>("/api/public/teachers?limit=100", JsonDefaults.Options);
         var names = page!.Items.Select(t => t.FullName).ToList();
 
         Assert.Contains("Approved Amina", names);
@@ -61,7 +61,7 @@ public class PublicDirectoryTests : IClassFixture<ApiFactory>
         var students = await teacher.GetFromJsonAsync<JoinCodeEnvelope>("/api/teacher/students", JsonDefaults.Options);
 
         var anon = _factory.CreateClient();
-        var body = await anon.GetStringAsync("/api/public/teachers?pageSize=100");
+        var body = await anon.GetStringAsync("/api/public/teachers?limit=100");
 
         Assert.Contains("Leak Check", body);
         Assert.DoesNotContain("dir.leak.f3@test.local", body, StringComparison.OrdinalIgnoreCase);
@@ -233,7 +233,7 @@ public class PublicDirectoryTests : IClassFixture<ApiFactory>
             _factory, "dir.phoneHidden.f13@test.local", "Waiting Wendy", phone: "+20 100 999 0008");
 
         var anon = _factory.CreateClient();
-        var body = await anon.GetStringAsync("/api/public/teachers?pageSize=100");
+        var body = await anon.GetStringAsync("/api/public/teachers?limit=100");
 
         Assert.DoesNotContain("Waiting Wendy", body);
         Assert.DoesNotContain("999 0008", body);
@@ -246,7 +246,7 @@ public class PublicDirectoryTests : IClassFixture<ApiFactory>
         await TestAuth.RegisterAndSignInTeacherAsync(
             _factory, "dir.phoneAdmin.f13@test.local", "Pending Percy", subject: "Latin", phone: "+20 111 222 3333");
 
-        var page = await admin.GetFromJsonAsync<PagedAdminTeachers>("/api/admin/teachers?status=Pending&pageSize=100", JsonDefaults.Options);
+        var page = await admin.GetFromJsonAsync<PagedAdminTeachers>("/api/admin/teachers?status=Pending&limit=100", JsonDefaults.Options);
         var row = page!.Items.Single(t => t.Email == "dir.phoneadmin.f13@test.local");
 
         Assert.Equal("+20 111 222 3333", row.Phone);
@@ -310,13 +310,86 @@ public class PublicDirectoryTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Page_size_is_capped_at_one_hundred()
+    public async Task A_limit_past_the_cap_hands_back_at_most_a_hundred()
     {
         var anon = _factory.CreateClient();
 
-        var page = await anon.GetFromJsonAsync<PagedTeachers>("/api/public/teachers?pageSize=5000", JsonDefaults.Options);
+        var page = await anon.GetFromJsonAsync<PagedTeachers>("/api/public/teachers?limit=5000", JsonDefaults.Options);
 
-        Assert.Equal(100, page!.PageSize);
+        Assert.True(page!.Items.Count <= 100, $"asked for 5000 and got {page.Items.Count}");
+    }
+
+    /// <summary>
+    /// The property that matters about a scroll: walking it one row at a time reaches every
+    /// teacher, and reaches each of them once. A cursor that repeated a row or skipped one would
+    /// show up here as a count that disagrees with the single-request list.
+    /// </summary>
+    [Fact]
+    public async Task Walking_the_directory_by_cursor_visits_every_teacher_exactly_once()
+    {
+        var admin = await TestAuth.SignedInAdminAsync(_factory);
+        foreach (var name in new[] { "Walk Aya", "Walk Basma", "Walk Carim" })
+        {
+            var email = $"dir.walk.{name.Split(' ')[1].ToLowerInvariant()}.f16@test.local";
+            await TestAuth.RegisterAndSignInTeacherAsync(_factory, email, name);
+            await ApproveAsync(admin, email);
+        }
+
+        var anon = _factory.CreateClient();
+        var wholeList = await anon.GetFromJsonAsync<PagedTeachers>("/api/public/teachers?limit=100", JsonDefaults.Options);
+
+        var walked = new List<Guid>();
+        string? cursor = null;
+        // A row at a time is the harshest version of the walk: every slice boundary is a cursor.
+        do
+        {
+            var url = cursor is null
+                ? "/api/public/teachers?limit=1"
+                : $"/api/public/teachers?limit=1&cursor={Uri.EscapeDataString(cursor)}";
+            var slice = await anon.GetFromJsonAsync<PagedTeachers>(url, JsonDefaults.Options);
+
+            walked.AddRange(slice!.Items.Select(t => t.UserId));
+            cursor = slice.NextCursor;
+        }
+        while (cursor is not null);
+
+        Assert.Equal(wholeList!.Items.Select(t => t.UserId), walked);
+        Assert.Equal(walked.Count, walked.Distinct().Count());
+    }
+
+    /// <summary>The total is the answer to "how many are there", not "how many are left", so it
+    /// rides on the first slice and is absent from the rest rather than being recounted.</summary>
+    [Fact]
+    public async Task The_total_is_sent_once_at_the_head_of_the_walk()
+    {
+        var admin = await TestAuth.SignedInAdminAsync(_factory);
+        await TestAuth.RegisterAndSignInTeacherAsync(_factory, "dir.total.f17@test.local", "Total Tarek");
+        await ApproveAsync(admin, "dir.total.f17@test.local");
+
+        var anon = _factory.CreateClient();
+        var first = await anon.GetFromJsonAsync<PagedTeachers>("/api/public/teachers?limit=1", JsonDefaults.Options);
+
+        Assert.NotNull(first!.Total);
+        Assert.NotNull(first.NextCursor);
+
+        var second = await anon.GetFromJsonAsync<PagedTeachers>(
+            $"/api/public/teachers?limit=1&cursor={Uri.EscapeDataString(first.NextCursor!)}", JsonDefaults.Options);
+
+        Assert.Null(second!.Total);
+    }
+
+    /// <summary>A cursor is opaque, and a hand-made one is a mistake worth naming — being quietly
+    /// served the first slice again is how a caller ends up looping forever.</summary>
+    [Theory]
+    [InlineData("not-base64-%20at-all")]
+    [InlineData("aGVsbG8")]
+    public async Task A_cursor_we_never_issued_is_refused(string cursor)
+    {
+        var anon = _factory.CreateClient();
+
+        var response = await anon.GetAsync($"/api/public/teachers?cursor={Uri.EscapeDataString(cursor)}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -367,7 +440,7 @@ public class PublicDirectoryTests : IClassFixture<ApiFactory>
 
     private static async Task<Guid> PendingIdAsync(HttpClient admin, string email)
     {
-        var pending = await admin.GetFromJsonAsync<PagedTeacherRows>("/api/admin/teachers?status=Pending&pageSize=200", JsonDefaults.Options);
+        var pending = await admin.GetFromJsonAsync<PagedTeacherRows>("/api/admin/teachers?status=Pending&limit=200", JsonDefaults.Options);
         // Registration normalises email to lowercase — match the same way here.
         return pending!.Items.First(t => string.Equals(t.Email, email, StringComparison.OrdinalIgnoreCase)).UserId;
     }
@@ -396,13 +469,13 @@ public class PublicDirectoryTests : IClassFixture<ApiFactory>
     private static async Task<List<string>> SearchAsync(HttpClient anon, string term)
     {
         var page = await anon.GetFromJsonAsync<PagedTeachers>(
-            $"/api/public/teachers?pageSize=100&q={Uri.EscapeDataString(term)}", JsonDefaults.Options);
+            $"/api/public/teachers?limit=100&q={Uri.EscapeDataString(term)}", JsonDefaults.Options);
         return page!.Items.Select(t => t.FullName).ToList();
     }
 
     private static async Task<PublicTeacherRow> FindAsync(HttpClient anon, Guid teacherId)
     {
-        var page = await anon.GetFromJsonAsync<PagedTeachers>("/api/public/teachers?pageSize=100", JsonDefaults.Options);
+        var page = await anon.GetFromJsonAsync<PagedTeachers>("/api/public/teachers?limit=100", JsonDefaults.Options);
         return page!.Items.Single(t => t.UserId == teacherId);
     }
 
@@ -420,7 +493,7 @@ public class PublicDirectoryTests : IClassFixture<ApiFactory>
         return form;
     }
 
-    private record PagedTeachers(List<PublicTeacherRow> Items, int Page, int PageSize, int Total);
+    private record PagedTeachers(List<PublicTeacherRow> Items, string? NextCursor, int? Total);
     private record PublicTeacherRow(
         Guid UserId, string FullName, string? Subject, string? Phone, string? PhotoETag, DateTimeOffset MemberSinceUtc,
         int OpenLessonCount, int PublishedLessonCount, int StudentCount, int MarkCount, int PassedMarkCount);

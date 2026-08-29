@@ -24,7 +24,7 @@ public class MarkConstraintTests : IClassFixture<ApiFactory>
         var teacher = await TestAuth.RegisterAndSignInTeacherAsync(_factory, teacherEmail);
         var admin = await TestAuth.SignedInAdminAsync(_factory);
 
-        var listResponse = await admin.GetAsync("/api/admin/teachers?status=Pending&pageSize=200");
+        var listResponse = await admin.GetAsync("/api/admin/teachers?status=Pending&limit=200");
         var pending = await listResponse.Content.ReadFromJsonAsync<PagedTeachers>(JsonDefaults.Options);
         var teacherUserId = pending!.Items.First(t => t.Email == teacherEmail).UserId;
         await admin.PostAsync($"/api/admin/teachers/{teacherUserId}/approve", null);

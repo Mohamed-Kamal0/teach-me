@@ -141,6 +141,13 @@
   .app-bar:not(.bar--few) .bar-nav { display: none; }
   .app-bar:not(.bar--few) .bar-menu { display: inline-flex; }
   .bar-menu-out { display: inline-flex; }
+
+  // Signed out, the three account words and the ⋮ are two ways to the same three pages, and
+  // 1023px is the width at which they stop fitting alongside the centre nav. Showing both is
+  // what drew "Sign in" through "Discover": neither group can shrink — MDC gives every button a
+  // 64px floor — so the sides overflow their boxes and paint over each other rather than
+  // wrapping. The words go, the menu stays, and the centre nav keeps the room it had.
+  .bar__side--end .bar-nav { display: none; }
 }
 
 @media (max-width: 640px) {

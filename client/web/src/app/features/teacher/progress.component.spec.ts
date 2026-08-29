@@ -3,6 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router, provideRouter } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { PAGE_SIZE } from '../../core/cursor-list';
 import { ProgressComponent } from './progress.component';
 
 /** The progress table is where a teacher sees who is falling behind, so it is the likeliest
@@ -18,8 +19,7 @@ describe('ProgressComponent', () => {
         lessonsMarked: 3, totalLessons: 8, passedCount: 2, failedCount: 1
       }
     ],
-    page: 1,
-    pageSize: 100,
+    nextCursor: null,
     total: 1
   };
 
@@ -39,7 +39,7 @@ describe('ProgressComponent', () => {
   function render() {
     const fixture = TestBed.createComponent(ProgressComponent);
     fixture.detectChanges();
-    http.expectOne('/api/teacher/progress?pageSize=100').flush(response);
+    http.expectOne(`/api/teacher/progress?limit=${PAGE_SIZE}`).flush(response);
     fixture.detectChanges();
     return fixture;
   }

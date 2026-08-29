@@ -3,7 +3,7 @@ namespace TeachMe.Api.Features.Student.Services;
 public interface ICourseService
 {
     Task<List<CourseSummaryDto>> ListAsync(CancellationToken ct);
-    Task<PagedResult<StudentLessonWithMarkDto>> GetLessonsAsync(Guid teacherId, int? page, int? pageSize, CancellationToken ct);
+    Task<CursorPage<StudentLessonWithMarkDto>> GetLessonsAsync(Guid teacherId, string? cursor, int? limit, CancellationToken ct);
     Task<StudentLessonWithMarkDto> GetLessonAsync(Guid teacherId, Guid lessonId, CancellationToken ct);
     Task MarkSeenAsync(Guid teacherId, CancellationToken ct);
 }
@@ -35,15 +35,31 @@ public class CourseService(AppDbContext db, ICurrentUser currentUser, TimeProvid
         return result;
     }
 
-    public async Task<PagedResult<StudentLessonWithMarkDto>> GetLessonsAsync(Guid teacherId, int? page, int? pageSize, CancellationToken ct)
+    /// <summary>
+    /// The lessons a student may see, in teaching order, a slice at a time. VisibleTo already
+    /// orders by OrderIndex and already drops the unopened, so the cursor is that one number and
+    /// a lesson the teacher opens mid-scroll simply appears in its place on a later slice.
+    /// </summary>
+    public async Task<CursorPage<StudentLessonWithMarkDto>> GetLessonsAsync(Guid teacherId, string? cursor, int? limit, CancellationToken ct)
     {
-        var (p, ps) = PagingExtensions.Normalize(page, pageSize);
+        var take = Cursor.NormalizeLimit(limit);
+        var key = Cursor.Read(cursor, fields: 1);
         var studentId = currentUser.UserId;
         var now = clock.GetUtcNow();
 
-        var query = db.Lessons.VisibleTo(teacherId, now);
-        var total = await query.CountAsync(ct);
-        var lessons = await query.Skip((p - 1) * ps).Take(ps).ToListAsync(ct);
+        var visible = db.Lessons.VisibleTo(teacherId, now);
+
+        int? total = key is null ? await visible.CountAsync(ct) : null;
+
+        if (key is { } k)
+        {
+            var afterOrder = k.Int(0);
+            visible = visible.Where(l => l.OrderIndex > afterOrder).OrderBy(l => l.OrderIndex);
+        }
+
+        var rows = await visible.Take(take + 1).ToListAsync(ct);
+        var hasMore = rows.Count > take;
+        var lessons = hasMore ? rows[..take] : rows;
 
         var lessonIds = lessons.Select(l => l.Id).ToList();
         var marks = await db.Marks
@@ -56,7 +72,12 @@ public class CourseService(AppDbContext db, ICurrentUser currentUser, TimeProvid
             return new StudentLessonWithMarkDto(l, mark?.Score, mark is null ? null : mark.Score >= l.PassMark);
         }).ToList();
 
-        return new PagedResult<StudentLessonWithMarkDto> { Items = items, Page = p, PageSize = ps, Total = total };
+        return new CursorPage<StudentLessonWithMarkDto>
+        {
+            Items = items,
+            NextCursor = hasMore && lessons.Count > 0 ? Cursor.Encode(lessons[^1].OrderIndex.ToString()) : null,
+            Total = total
+        };
     }
 
     public async Task<StudentLessonWithMarkDto> GetLessonAsync(Guid teacherId, Guid lessonId, CancellationToken ct)
