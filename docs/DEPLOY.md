@@ -258,10 +258,10 @@ All demo accounts use the password **`Demo1234`**.
 | # | Check | Expected |
 | :--- | :--- | :--- |
 | 1 | `curl.exe https://teaching-learning-platform.fly.dev/api/health` | `{"status":"ok","db":"ok"}` |
-| 2 | Open the Vercel site signed out | Home page shows 2 approved teachers, 8 lessons |
+| 2 | Open the Vercel site signed out | Home page lists the approved teachers (14) and their lessons (65) |
 | 3 | Log in as `teacher.approved@demo.test` | Lands on the teacher area, not back on `/login` |
 | 4 | Log in as `student.one@demo.test`, open a course | Lesson list renders; the third lesson's quiz is not yet available |
-| 5 | Log in as your administrator (`admin@teacherslessons.test`) | Approvals screen lists a pending teacher |
+| 5 | Log in as your administrator (`admin@teacherslessons.test`) | Approvals screen lists the six pending teachers |
 | 6 | Add a lesson, `fly apps restart teaching-learning-platform`, reload | **The lesson is still there** — proves the volume is doing its job |
 
 Check 3 is the important one. A successful login proves the whole chain: Vercel's rewrite reached

@@ -109,6 +109,13 @@ All demo accounts use the password **`Demo1234`**; the administrator uses whatev
 | Student — on two courses        | `student.one@demo.test`                                   |
 | Student — on one course         | `student.two@demo.test`                                   |
 
+Behind those named accounts sits a generated cohort, so every list is seen at a realistic size:
+**20 more teachers** (`teacher01@demo.test` … `teacher20@demo.test` — twelve approved, five
+pending, three turned away) and **40 more students** (`student01@demo.test` …
+`student40@demo.test`), each on one to three courses, with roughly 65 lessons and 140-odd marks
+between them. They all use `Demo1234` too. Three students in five are put on one of the two named
+approved teachers, so the class list and progress table you demo are full rather than sparse.
+
 The seeded lessons have **deliberately staggered moments**: one fully open, one whose quiz opens
 tomorrow, one whose answers are already released, and one not open at all. That is what makes the
 timing requirement demonstrable without touching the database by hand.

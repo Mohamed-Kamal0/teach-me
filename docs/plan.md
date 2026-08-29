@@ -694,7 +694,10 @@ dotnet user-secrets set "Seed:AdminPassword" "<choose one>" --project server/Tea
 
 ### Demo data — one command
 
-`dotnet run -- seed --demo` drops, migrates, and seeds a known set: one administrator, three teachers (one approved, one pending, one rejected), eight lessons across the approved teachers with **deliberately staggered moments** — one open, one opening in an hour, one quiz opening tomorrow, one answers already released — two students, one on two courses, and a scatter of marks including a pass and a fail.
+`dotnet run -- seed --demo` drops, migrates, and seeds a known set: one administrator, three teachers (one approved, one pending, one rejected), eight lessons across the approved teachers with **deliberately staggered moments** — one open, one opening in an hour, one quiz opening tomorrow, one answers already released — two students, one on two courses, and a scatter of marks including a pass and a fail. Behind that
+scripted set it then generates a cohort at realistic size — twenty more teachers across all three
+standings, forty more students on one to three courses each, and their lessons and marks — so the
+approvals queue, class lists and progress tables are demonstrated full rather than nearly empty.
 
 A broken database at 09:00 on demo day is then a thirty-second fix, not an improvisation. The `--demo` flag refuses to run when `ASPNETCORE_ENVIRONMENT=Production`.
 

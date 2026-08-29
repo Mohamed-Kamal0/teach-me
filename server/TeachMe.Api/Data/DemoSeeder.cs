@@ -5,13 +5,18 @@ using TeachMe.Api.Domain;
 
 namespace TeachMe.Api.Data;
 
+/// <summary>What a demo reseed produced, so the caller can report it rather than guess at it.</summary>
+public readonly record struct DemoSeedSummary(int Teachers, int Students, int Lessons, int Enrollments, int Marks);
+
 /// <summary>
 /// `dotnet run -- seed --demo` — drop, migrate, and seed one known, staggered dataset,
-/// so a broken database on demo day is a thirty-second fix, not an improvisation.
+/// so a broken database on demo day is a thirty-second fix, not an improvisation. The named
+/// accounts below are the scripted walkthrough; a generated cohort of tens of teachers,
+/// students, lessons and marks sits behind them so every screen is seen at a realistic size.
 /// </summary>
 public static class DemoSeeder
 {
-    public static async Task RunAsync(AppDbContext db, string adminEmail, string adminPassword, TimeProvider clock)
+    public static async Task<DemoSeedSummary> RunAsync(AppDbContext db, string adminEmail, string adminPassword, TimeProvider clock)
     {
         await db.Database.EnsureDeletedAsync();
         await db.Database.MigrateAsync();
@@ -203,6 +208,242 @@ public static class DemoSeeder
         };
         db.Marks.AddRange(marks);
 
+        // ---- Bulk cohort ---------------------------------------------------------------
+        // Everything above is the scripted part of the demo: those rows are walked through by
+        // name and asserted on by the smoke tests, so they stay exactly as they are.
+        // Everything below is volume — tens of teachers, students, lessons and marks — so the
+        // approvals queue, the class lists and the progress tables are seen at a realistic
+        // size instead of looking like an empty shell.
+        var rng = new Random(20260830);   // fixed seed: two reseeds give the same demo database
+
+        // One hash reused across the generated accounts. PBKDF2 is deliberately slow, and
+        // hashing the same "Demo1234" sixty times over would add seconds to every reseed.
+        var sharedHash = hasher.HashPassword(admin, "Demo1234");
+
+        string[] firstNames =
+        [
+            "Amir", "Hana", "Mostafa", "Layla", "Tamer", "Dina", "Ziad", "Farida", "Hassan", "Mariam",
+            "Sherif", "Yasmin", "Adham", "Rana", "Kareem", "Nada", "Bassem", "Sara", "Marwan", "Habiba"
+        ];
+        string[] lastNames =
+        [
+            "Ibrahim", "Mahmoud", "Shaker", "Fathy", "Zaki", "Hegazy", "Roshdy", "Mansour",
+            "Selim", "Gaber", "Kamel", "Sabry", "Riad", "Hafez", "Bakr", "Lotfy"
+        ];
+        string[] subjects =
+        [
+            "Mathematics", "Physics", "Chemistry", "Biology",
+            "History", "Geography", "English Literature", "Computer Science"
+        ];
+        var syllabus = new Dictionary<string, string[]>
+        {
+            ["Mathematics"] = ["Number Sense", "Working with Fractions", "Ratio and Proportion", "Intro to Geometry", "Trigonometry Basics", "Probability"],
+            ["Physics"] = ["Motion and Speed", "Forces at Work", "Energy and Power", "Waves and Sound", "Light and Optics", "Electric Circuits"],
+            ["Chemistry"] = ["States of Matter", "The Periodic Table", "Chemical Bonding", "Acids and Bases", "Reaction Rates", "Organic Chemistry"],
+            ["Biology"] = ["The Human Cell", "Digestion", "Respiration", "Heredity", "Evolution", "Human Body Systems"],
+            ["History"] = ["Ancient Egypt", "The Classical World", "The Middle Ages", "Age of Revolutions", "The World Wars", "The Modern Era"],
+            ["Geography"] = ["Reading a Map", "Rivers and Deltas", "Climate Zones", "Population and Cities", "Natural Resources", "Fieldwork Methods"],
+            ["English Literature"] = ["Close Reading", "Poetry and Form", "Shakespeare in Context", "The Modern Novel", "Writing an Essay", "Drama on the Page"],
+            ["Computer Science"] = ["How Computers Think", "Variables and Loops", "Working with Data", "Algorithms", "Databases", "The Web"]
+        };
+        string[] bios =
+        [
+            "Revising for the end-of-term exams.",
+            "Repeating the year and determined to pass this time.",
+            "Studying in the evenings around work.",
+            "Strongest in the sciences, weakest in essays.",
+            "Joined mid-term after moving schools."
+        ];
+
+        var usedNames = new HashSet<string>();
+        string NextName()
+        {
+            while (true)
+            {
+                var name = $"{firstNames[rng.Next(firstNames.Length)]} {lastNames[rng.Next(lastNames.Length)]}";
+                if (usedNames.Add(name))
+                {
+                    return name;
+                }
+            }
+        }
+
+        var usedCodes = new HashSet<string>(db.Teachers.Local.Select(t => t.JoinCode));
+        string NextJoinCode()
+        {
+            string code;
+            do
+            {
+                code = JoinCodeGenerator.Generate();
+            } while (!usedCodes.Add(code));
+            return code;
+        }
+
+        // Twenty more teachers: twelve teaching, five still waiting on a decision, three turned
+        // away — enough that the approvals queue is a queue and not a single row.
+        var bulkTeachers = new List<Teacher>();
+        var bulkLessons = new List<Lesson>();
+        for (var i = 1; i <= 20; i++)
+        {
+            var status = i <= 12 ? TeacherStatus.Approved
+                : i <= 17 ? TeacherStatus.Pending
+                : TeacherStatus.Rejected;
+
+            var user = MakeUser($"teacher{i:00}@demo.test", NextName(), UserRole.Teacher);
+            user.PasswordHash = sharedHash;
+            user.CreatedAtUtc = now.AddDays(-rng.Next(20, 120));
+            db.Users.Add(user);
+
+            var subject = subjects[(i - 1) % subjects.Length];
+            var teacher = new Teacher
+            {
+                UserId = user.Id,
+                JoinCode = NextJoinCode(),
+                Subject = subject,
+                Phone = $"+20 100 555 {1000 + i}",
+                Status = status,
+                DecidedAtUtc = status == TeacherStatus.Pending ? null : now.AddDays(-rng.Next(1, 20)),
+                DecidedByUserId = status == TeacherStatus.Pending ? null : admin.Id
+            };
+            db.Teachers.Add(teacher);
+            bulkTeachers.Add(teacher);
+
+            if (status != TeacherStatus.Approved)
+            {
+                continue;
+            }
+
+            var titles = syllabus[subject];
+            var lessonCount = 4 + rng.Next(0, 3);
+            for (var order = 1; order <= lessonCount; order++)
+            {
+                // Each course is walked from a fortnight ago into next week, so at any moment
+                // some lessons are open, one is opening about now, and the tail is still shut.
+                var opensAt = now.AddDays(-14 + (order * 4) + rng.Next(-1, 2)).AddHours(rng.Next(0, 9));
+                var withQuiz = order % 4 != 0;
+                var withAnswers = withQuiz && order % 3 != 0;
+                var quizOpensAt = opensAt.AddHours(rng.Next(1, 49));
+
+                bulkLessons.Add(new Lesson
+                {
+                    Id = Guid.CreateVersion7(),
+                    TeacherUserId = teacher.UserId,
+                    Title = titles[(order - 1) % titles.Length],
+                    OrderIndex = order,
+                    RecordingUrl = recordings[(order - 1) % recordings.Length],
+                    HandoutUrl = "https://example.com/handout/" + Guid.NewGuid(),
+                    QuizUrl = withQuiz ? "https://example.com/quiz/" + Guid.NewGuid() : null,
+                    AnswersUrl = withAnswers ? "https://example.com/answers/" + Guid.NewGuid() : null,
+                    DurationMinutes = 30 + (rng.Next(0, 5) * 15),
+                    QuizMaxScore = 20,
+                    PassMark = 10,
+                    OpensAtUtc = opensAt,
+                    QuizOpensAtUtc = withQuiz ? quizOpensAt : null,
+                    AnswersOpenAtUtc = withAnswers ? quizOpensAt.AddDays(rng.Next(1, 4)) : null
+                });
+            }
+        }
+        db.Lessons.AddRange(bulkLessons);
+
+        var approvedPool = new List<Teacher> { approvedTeacher, secondApprovedTeacher };
+        approvedPool.AddRange(bulkTeachers.Where(t => t.Status == TeacherStatus.Approved));
+
+        var lessonsByTeacher = lessons.Concat(bulkLessons)
+            .GroupBy(l => l.TeacherUserId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        // Forty more students, each on one to three courses and most with marks behind them,
+        // so a class list scrolls and a progress table has a spread to read.
+        var bulkEnrollments = new List<Enrollment>();
+        var bulkMarks = new List<Mark>();
+        for (var i = 1; i <= 40; i++)
+        {
+            var name = NextName();
+            var user = MakeUser($"student{i:00}@demo.test", name, UserRole.Student);
+            user.PasswordHash = sharedHash;
+            user.CreatedAtUtc = now.AddDays(-rng.Next(5, 90));
+            db.Users.Add(user);
+
+            db.Students.Add(new Student
+            {
+                UserId = user.Id,
+                DisplayName = name.Split(' ')[0],
+                Phone = $"+20 111 555 {2000 + i}",
+                DateOfBirth = new DateOnly(2002 + rng.Next(0, 6), rng.Next(1, 13), rng.Next(1, 29)),
+                // Every third profile is left bare: a half-filled profile is the normal case.
+                Bio = i % 3 == 0 ? null : bios[rng.Next(bios.Length)]
+            });
+
+            // Three students in five are put on one of the two teachers the demo actually signs
+            // in as, so that class list and progress table are full rather than a handful of
+            // rows scattered thinly across fourteen courses.
+            var courseCount = 1 + rng.Next(0, 3);
+            var courses = approvedPool.OrderBy(_ => rng.Next()).Take(courseCount).ToList();
+            if (rng.Next(5) < 3)
+            {
+                var headline = rng.Next(2) == 0 ? approvedTeacher : secondApprovedTeacher;
+                if (!courses.Contains(headline))
+                {
+                    courses[rng.Next(courses.Count)] = headline;
+                }
+            }
+
+            foreach (var teacher in courses)
+            {
+                var joinedAt = now.AddDays(-rng.Next(1, 40));
+                bulkEnrollments.Add(new Enrollment
+                {
+                    Id = Guid.CreateVersion7(),
+                    StudentUserId = user.Id,
+                    TeacherUserId = teacher.UserId,
+                    JoinedAtUtc = joinedAt,
+                    LastViewedAtUtc = rng.Next(4) == 0
+                        ? null
+                        : joinedAt.AddDays(rng.NextDouble() * (now - joinedAt).TotalDays)
+                });
+
+                if (!lessonsByTeacher.TryGetValue(teacher.UserId, out var courseLessons))
+                {
+                    continue;
+                }
+
+                foreach (var lesson in courseLessons)
+                {
+                    // A mark only exists once the quiz was open and the student was on the
+                    // course to sit it, and a quarter of the time nobody sat it at all.
+                    if (lesson.QuizOpensAtUtc is not { } quizOpensAt)
+                    {
+                        continue;
+                    }
+
+                    var from = quizOpensAt > joinedAt ? quizOpensAt : joinedAt;
+                    if (from > now || rng.Next(100) < 25)
+                    {
+                        continue;
+                    }
+
+                    bulkMarks.Add(new Mark
+                    {
+                        Id = Guid.CreateVersion7(),
+                        LessonId = lesson.Id,
+                        StudentUserId = user.Id,
+                        // Centred just above the pass mark, with a real tail of failures.
+                        Score = Math.Clamp(lesson.PassMark + rng.Next(-7, 11), 0, lesson.QuizMaxScore),
+                        RecordedAtUtc = from.AddHours(rng.NextDouble() * (now - from).TotalHours)
+                    });
+                }
+            }
+        }
+        db.Enrollments.AddRange(bulkEnrollments);
+        db.Marks.AddRange(bulkMarks);
+
         await db.SaveChangesAsync();
+
+        return new DemoSeedSummary(
+            db.Teachers.Local.Count,
+            db.Students.Local.Count,
+            db.Lessons.Local.Count,
+            db.Enrollments.Local.Count,
+            db.Marks.Local.Count);
     }
 }

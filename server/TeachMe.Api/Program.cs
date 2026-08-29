@@ -155,8 +155,10 @@ if (args.Length > 0 && string.Equals(args[0], "seed", StringComparison.OrdinalIg
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var clock = scope.ServiceProvider.GetRequiredService<TimeProvider>();
-        await DemoSeeder.RunAsync(db, adminEmail, adminPassword, clock);
-        Console.WriteLine("Demo data seeded: one administrator, four teachers, eight lessons, two students.");
+        var summary = await DemoSeeder.RunAsync(db, adminEmail, adminPassword, clock);
+        Console.WriteLine(
+            $"Demo data seeded: one administrator, {summary.Teachers} teachers, {summary.Lessons} lessons, " +
+            $"{summary.Students} students, {summary.Enrollments} enrolments, {summary.Marks} marks.");
     }
 
     return;
