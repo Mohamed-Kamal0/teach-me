@@ -5,26 +5,49 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatExpansionModule } from '@angular/material/expansion';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { StatePanelComponent } from '../../shared/state-panel.component';
 import { ScrollMoreComponent } from '../../shared/scroll-more.component';
+import { ListSearchComponent } from '../../shared/list-search.component';
 import { MediaEmbedComponent } from '../../shared/media-embed.component';
 import { ReleaseRailComponent } from '../../shared/release-rail.component';
 import { CursorPage, StudentLessonWithMark } from '../../core/models';
 import { CursorList } from '../../core/cursor-list';
 
+/** Whether the list is showing every open lesson, or only the ones with a mark on them. */
+type LessonMarkState = 'all' | 'marked' | 'unmarked';
+
 @Component({
   selector: 'app-course-lessons',
   standalone: true,
   imports: [
-    DatePipe, RouterLink, MatButtonModule, MatIconModule, MatExpansionModule, StatePanelComponent,
-    ScrollMoreComponent, MediaEmbedComponent, ReleaseRailComponent
+    DatePipe, RouterLink, MatButtonModule, MatIconModule, MatExpansionModule,
+    MatButtonToggleModule, StatePanelComponent, ScrollMoreComponent, ListSearchComponent,
+    MediaEmbedComponent, ReleaseRailComponent
   ],
   template: `
     <a mat-stroked-button routerLink="/student/courses" class="back-link"><mat-icon>arrow_back</mat-icon> Back to courses</a>
 
+    @if (controlsVisible()) {
+      <div class="list-controls">
+        <app-list-search placeholder="Search lessons by title…"
+          label="Search this course by lesson title" (search)="onSearch($event)"></app-list-search>
+        <div class="list-controls__filters">
+          <!-- "Marked" is this student's own mark: the quizzes already returned, against the
+               ones still to come back. -->
+          <mat-button-toggle-group [value]="state()" (change)="setState($event.value)"
+            aria-label="Filter lessons by whether they have been marked">
+            <mat-button-toggle value="all">All</mat-button-toggle>
+            <mat-button-toggle value="marked">Marked</mat-button-toggle>
+            <mat-button-toggle value="unmarked">Not marked</mat-button-toggle>
+          </mat-button-toggle-group>
+        </div>
+      </div>
+    }
+
     <app-state-panel [loading]="list.loading()" [error]="list.error()" [empty]="list.rows().length === 0"
       emptyIcon="menu_book" (retry)="list.start()"
-      emptyMessage="Your teacher hasn't opened anything here yet.">
+      [emptyMessage]="emptyMessage()">
       <mat-accordion multi>
         @for (item of list.rows(); track item.lesson.id) {
           <mat-expansion-panel class="lesson">
@@ -88,12 +111,19 @@ import { CursorList } from '../../core/cursor-list';
   `]
 })
 export class CourseLessonsComponent implements OnInit {
+  /** What the rows on screen were fetched with. Both go to the server: the accordion holds one
+   *  slice of the course, and a lesson further down it is still one the search has to find. */
+  readonly query = signal('');
+  readonly state = signal<LessonMarkState>('all');
+
   private teacherId!: string;
   private http = inject(HttpClient);
   private route = inject(ActivatedRoute);
 
   readonly list = new CursorList<StudentLessonWithMark>((cursor, limit) => {
     const params = new URLSearchParams({ limit: String(limit) });
+    if (this.query()) params.set('q', this.query());
+    if (this.state() !== 'all') params.set('state', this.state());
     if (cursor) params.set('cursor', cursor);
     return this.http.get<CursorPage<StudentLessonWithMark>>(
       `/api/student/courses/${this.teacherId}/lessons?${params}`);
@@ -106,4 +136,25 @@ export class CourseLessonsComponent implements OnInit {
     this.http.post(`/api/student/courses/${this.teacherId}/seen`, {}).subscribe({ error: () => {} });
   }
 
+  controlsVisible(): boolean {
+    return this.list.total() > 1 || this.query().length > 0 || this.state() !== 'all';
+  }
+
+  emptyMessage(): string {
+    if (this.query()) return `No lesson's title matches "${this.query()}".`;
+    if (this.state() === 'marked') return 'None of your quizzes here has been marked yet.';
+    if (this.state() === 'unmarked') return 'Every lesson open to you has been marked.';
+    return "Your teacher hasn't opened anything here yet.";
+  }
+
+  /** A new term, or a new filter, is a different list — so it starts from the top. */
+  onSearch(term: string): void {
+    this.query.set(term);
+    this.list.start();
+  }
+
+  setState(state: LessonMarkState): void {
+    this.state.set(state);
+    this.list.start();
+  }
 }

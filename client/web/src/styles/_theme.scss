@@ -265,6 +265,27 @@ table, .tabular-nums { font-variant-numeric: tabular-nums; }
   .page-head__actions > * { flex: 1 1 auto; }
 }
 
+// ---- List controls ---------------------------------------------------------
+// The band between a page's heading and its rows: what to search the list for on the left,
+// which slice of it to show on the right. It sits outside the state panel, so a search that
+// matched nothing still has the box that would undo it.
+.list-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 1.25rem;
+}
+.list-controls app-list-search { flex: 1 1 18rem; }
+// Pushed to the far end on a wide screen; directly under the box once they wrap.
+.list-controls__filters { margin-left: auto; }
+
+@media (max-width: 700px) {
+  .list-controls__filters { width: 100%; margin-left: 0; }
+  .list-controls__filters mat-button-toggle-group { width: 100%; }
+  .list-controls__filters .mat-button-toggle { flex: 1 1 auto; }
+}
+
 // ---- Notices: an error you cannot scroll past ------------------------------
 .notice {
   display: flex;

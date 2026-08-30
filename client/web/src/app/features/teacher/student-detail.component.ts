@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -8,19 +8,25 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { FormsModule } from '@angular/forms';
 import { StatePanelComponent } from '../../shared/state-panel.component';
+import { ListSearchComponent } from '../../shared/list-search.component';
 import { AvatarComponent } from '../../shared/avatar.component';
 import { LessonMark, ProblemDetails, StudentProfile } from '../../core/models';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
 import { NotifyService } from '../../core/notify.service';
+
+/** Which verdicts the marks table is showing. */
+type MarkResult = 'all' | 'passed' | 'failed';
 
 @Component({
   selector: 'app-student-detail',
   standalone: true,
   imports: [
     DatePipe, RouterLink, MatTableModule, MatButtonModule, MatIconModule, MatFormFieldModule,
-    MatInputModule, MatProgressBarModule, FormsModule, StatePanelComponent, AvatarComponent
+    MatInputModule, MatProgressBarModule, MatButtonToggleModule, FormsModule, StatePanelComponent,
+    ListSearchComponent, AvatarComponent
   ],
   template: `
     <a mat-stroked-button routerLink="/teacher/students" class="back-link"><mat-icon>arrow_back</mat-icon> Back to students</a>
@@ -73,8 +79,29 @@ import { NotifyService } from '../../core/notify.service';
         @if (d.marks.length === 0) {
           <p class="text-muted">No marks recorded for this student yet.</p>
         } @else {
+          <!-- Every mark this teacher has given this student is already on the page, so both
+               controls narrow what is drawn rather than asking the server again. -->
+          @if (d.marks.length > 1) {
+            <div class="list-controls">
+              <app-list-search placeholder="Search marks by lesson…"
+                label="Search this student's marks by lesson title" (search)="onSearch($event)"></app-list-search>
+              <div class="list-controls__filters">
+                <mat-button-toggle-group [value]="result()" (change)="setResult($event.value)"
+                  aria-label="Filter marks by result">
+                  <mat-button-toggle value="all">All</mat-button-toggle>
+                  <mat-button-toggle value="passed">Passed</mat-button-toggle>
+                  <mat-button-toggle value="failed">Failed</mat-button-toggle>
+                </mat-button-toggle-group>
+              </div>
+            </div>
+          }
+
+          @if (visibleMarks().length === 0) {
+            <p class="text-muted">{{ noMatchMessage() }}</p>
+          }
+
           <div class="table-wrap">
-            <table mat-table [dataSource]="d.marks" class="data-table">
+            <table mat-table [dataSource]="visibleMarks()" class="data-table">
               <ng-container matColumnDef="lessonTitle">
                 <th mat-header-cell *matHeaderCellDef>Lesson</th>
                 <td mat-cell *matCellDef="let row" data-label="Lesson" class="cell-title">{{ row.lessonTitle }}</td>
@@ -163,12 +190,27 @@ import { NotifyService } from '../../core/notify.service';
 })
 export class StudentDetailComponent implements OnInit {
   columns = ['lessonTitle', 'score', 'result', 'actions'];
+  /** What the marks table is narrowed to — both applied here, over rows already in hand. */
+  readonly query = signal('');
+  readonly result = signal<MarkResult>('all');
   loading = signal(true);
   error = signal<ProblemDetails | null>(null);
   data = signal<StudentProfile | null>(null);
   editingId = signal<string | null>(null);
   saving = signal(false);
   editScore = 0;
+
+  /** The marks on screen: the verdict first, then what was typed. */
+  readonly visibleMarks = computed(() => {
+    const marks = this.data()?.marks ?? [];
+    const result = this.result();
+    const term = this.query().toLocaleLowerCase();
+    return marks.filter(m => {
+      if (result === 'passed' && !m.passed) return false;
+      if (result === 'failed' && m.passed) return false;
+      return !term || m.lessonTitle.toLocaleLowerCase().includes(term);
+    });
+  });
 
   private studentId!: string;
   private http = inject(HttpClient);
@@ -187,6 +229,21 @@ export class StudentDetailComponent implements OnInit {
       next: (res) => { this.data.set(res); this.loading.set(false); },
       error: (err) => { this.error.set(problemFrom(err)); this.loading.set(false); }
     });
+  }
+
+  noMatchMessage(): string {
+    if (this.query()) return `No lesson matches "${this.query()}".`;
+    return this.result() === 'passed'
+      ? 'No passes among these marks.'
+      : 'No failures among these marks.';
+  }
+
+  onSearch(term: string): void {
+    this.query.set(term);
+  }
+
+  setResult(result: MarkResult): void {
+    this.result.set(result);
   }
 
   /** Same arithmetic as the progress table's bar, off the same two numbers. */

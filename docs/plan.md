@@ -261,23 +261,23 @@ The caller is always resolved from the **auth cookie**, never from the URL. Ever
 | `PUT /api/me/photo` (multipart `file`)              | any signed-in      | 200 `{photoETag, updatedAtUtc}` — re-encoded to 256×256 WebP      | 400 not an image / undecodable / wrong content type, **413 over 5 MB** (§12.1) |
 | `DELETE /api/me/photo`                              | any signed-in      | 204 — idempotent; 204 even when there was none                    | —                                                                           |
 | `GET /api/users/{userId}/photo`                     | any signed-in      | 200 `image/webp` + `ETag`, `private, max-age=300` · 304           | 404 no photo                                                                |
-| `GET /api/admin/teachers?status=&cursor=&limit=`    | Admin              | 200 one slice, name asc then id                                   | 400 bad cursor, 403                                                         |
+| `GET /api/admin/teachers?status=&cursor=&limit=&q=` | Admin             | 200 one slice, name asc then id; `q` matches **name, subject or email**, within the standing asked for | 400 bad cursor, 403               |
 | `POST /api/admin/teachers/{id}/approve`             | Admin              | 204                                                               | 403, 404, **409 already decided**                                           |
 | `POST /api/admin/teachers/{id}/reject`              | Admin              | 204                                                               | 403, 404, **409 already decided**                                           |
-| `GET /api/teacher/lessons?cursor=&limit=`           | Teacher · Approved | 200 one slice, `OrderIndex` asc                                   | 400 bad cursor, 403 pending / turned away                                   |
+| `GET /api/teacher/lessons?cursor=&limit=&q=&state=` | Teacher · Approved | 200 one slice, `OrderIndex` asc; `q` matches the **title**, `state` is `open` \| `scheduled` \| `draft` (§12.8) | 400 bad cursor, 403 pending / turned away |
 | `POST /api/teacher/lessons`                         | Teacher · Approved | 201                                                               | 400 (§5), 403                                                               |
 | `GET` `PUT /api/teacher/lessons/{id}`               | Teacher · Approved | 200                                                               | 400 (§5), **404 if not theirs**, 403                                        |
 | `PUT /api/teacher/lessons/{id}/move` `{up}`         | Teacher · Approved | 204 — swap with the neighbour through a parked index, one transaction (§3, §12.6) | **404 if not theirs**, 403                                  |
 | `DELETE /api/teacher/lessons/{id}`                  | Teacher · Approved | 204                                                               | **409 marks exist**, 404, 403                                               |
-| `GET /api/teacher/students?cursor=&limit=`          | Teacher · Approved | 200 `{joinCode, students}` one slice, name asc then id            | 400 bad cursor, 403                                                         |
+| `GET /api/teacher/students?cursor=&limit=&q=`       | Teacher · Approved | 200 `{joinCode, students}` one slice, name asc then id; `q` matches **name or email** | 400 bad cursor, 403                              |
 | `GET /api/teacher/students/{studentId}`             | Teacher · Approved | 200 **a student profile** — details, `photoETag`, counts, then marks in lesson order (§12.2) | **404** unknown or not theirs, 403                    |
 | `POST /api/teacher/marks`                           | Teacher · Approved | 201                                                               | 400 score out of range, **409 duplicate**, 404 not your student/lesson, 403 |
 | `PUT /api/teacher/marks/{id}`                       | Teacher · Approved | 200                                                               | 400, 404, 403                                                               |
-| `GET /api/teacher/progress?cursor=&limit=`          | Teacher · Approved | 200 one slice (reads `0`, never spins), same order as the roster  | 400 bad cursor, 403                                                         |
+| `GET /api/teacher/progress?cursor=&limit=&q=&state=` | Teacher · Approved | 200 one slice (reads `0`, never spins), same order as the roster; `q` matches the **name**, `state` is `notstarted` \| `inprogress` \| `complete` | 400 bad cursor, 403 |
 | `GET` `PUT /api/student/profile`                    | Student            | 200                                                               | 400 — the server re-refuses locked fields, 403                              |
 | `POST /api/student/enrollments` `{code}`            | Student            | 201                                                               | 400 unknown code / teacher not approved, **409 already on this course**     |
 | `GET /api/student/courses`                          | Student            | 200 (legitimately empty)                                          | 403                                                                         |
-| `GET /api/student/courses/{teacherId}/lessons`      | Student · Enrolled | 200 one slice — open lessons only, `OrderIndex` asc               | **403 not on this course**, 404 no such teacher                             |
+| `GET /api/student/courses/{teacherId}/lessons?cursor=&limit=&q=&state=` | Student · Enrolled | 200 one slice — open lessons only, `OrderIndex` asc; `q` matches the **title**, `state` is `marked` \| `unmarked`, both applied **before** `VisibleTo` | **403 not on this course**, 404 no such teacher |
 | `GET /api/student/courses/{teacherId}/lessons/{id}` | Student · Enrolled | 200                                                               | 403 not enrolled, **404 not open yet**                                      |
 | `POST /api/student/courses/{teacherId}/seen`        | Student · Enrolled | 204 — stamps `LastViewedAtUtc`                                    | 403                                                                         |
 | `GET /api/student/whats-new`                        | Student            | 200 per-course + total                                            | 403                                                                         |
@@ -303,6 +303,8 @@ Stated once so it reads as a rule rather than per-route drift:
 Every list endpoint takes `?cursor=&limit=`, returns `CursorPage<T> { items, nextCursor, total }`, defaults `limit` to 20 and caps it at **100**, and has a **stated order** (named in the table above) whose last key is always an id, so no two rows can tie.
 
 `nextCursor` is null on the last slice. `total` rides the **first** slice only — a caller walking a list already has the number from the request that started the walk, and counting again per slice is a scan for an answer nobody asked for twice. The cursor is the sort key of the last row handed out, base64url'd: opaque, not secret, not signed. One we did not issue is a **400**, never a silent restart from the top, because a caller quietly served slice one again would loop forever.
+
+**Narrowing a list is `?q=` and `?state=`, applied before the cursor.** Every paged list takes an optional search term, and those whose rows have a state worth separating take an optional filter (§12.8). Both are applied **before** the keyset predicate, so the slice walks the narrowed list rather than the whole one and `total` is the count of matches; changing either is a new list, so the client starts it again from the top rather than resuming. An unrecognised `state` is treated as "all" rather than refused — the leniency `?status=` on the approvals queue already had. Neither ever widens what a caller may see: the ownership filter and, on a student's course, `VisibleTo` are applied to the same query.
 
 **It was offset paging first, and offset was wrong here.** `?page=&pageSize=` shipped with §1–§11 and the note attached to it was *"demo data never reaches page two — the point is that the habit is in the code, not that the pagination is exercised."* Both halves of that stopped being true at once: the demo cohort (§11) now runs to thirty-eight approved teachers and rosters of forty-odd, and the screens scroll rather than page. `OFFSET` answers a moving list by skipping a **count** of rows, so a teacher approved mid-scroll serves one row twice and hides another for good. Keyset resumes from a **row**. §12.6 has the full reasoning and the client half.
 
@@ -750,6 +752,7 @@ Everything in §1–§11 was planned before a line was written. This section is 
 | 12.5 | Finding a teacher by subject       | this section                 | `Teachers.Subject` | the directory still answers in aggregates, and only about approved teachers |
 | 12.6 | Cursor scrolling on every list     | this section                 | none            | a row is served once and never skipped, however the list changes under the reader |
 | 12.7 | Dark mode                          | [`darkmode.md`](darkmode.md) | none            | every measured contrast ratio in §8 is matched on the second ground, not merely claimed |
+| 12.8 | Search and filters on every list   | this section                 | none            | narrowing a list never widens it — the same ownership filter and the same `VisibleTo` |
 
 ### 12.1 Profile photos — bytes in the database, on purpose
 
@@ -919,6 +922,33 @@ The tripwire is a 1px sentinel **600px below** the last row, watched by an `Inte
 **Proved by** `contrast.mjs` (both palettes, non-zero exit below 4.5:1 — it reproduces §8's own published numbers exactly), `core/theme.service.spec.ts` (the explicit-light-on-dark-OS case, a junk stored value, an OS flip while the choice is and is not `system`, and a `localStorage` that throws), and one added `smoke.mjs` pass that opens the public home with `colorScheme: 'dark'` and asserts the computed `<body>` background is the dark surface — the one failure mode, a stylesheet that loads and never applies, that no unit test can see.
 
 **Rollback is one line:** delete the `@use 'dark'` in `_theme.scss` and every token falls back to its `:root` value — the same shape of rollback as the AI helper's unset key.
+
+### 12.8 Every list can be searched, and most can be filtered
+
+**The gap.** §12.6 made every list scroll, which is the half of the problem that is about *reaching* a row. It left the other half untouched: a teacher with forty students had one way to find Sara, and it was to scroll until Sara appeared. Discover had a search box — the only one in the app — and every other screen had nothing, not because those lists were short but because nobody had gone back to them.
+
+**One box, everywhere.** Discover's pill was lifted into `shared/list-search.component.ts` and every list now uses that one component: 250ms debounce, an arrow and an **Enter** key that skip the wait, a clear button that does not wait at all, and a committed term that is never emitted twice for the same text. Discover was rewritten to use it too, so there is no second implementation left to drift. Filters are a Material button-toggle group whose first option is always **All**, laid out beside the box by one `.list-controls` rule in `_theme.scss`.
+
+**Where the narrowing happens follows from where the rows are, and it is not a preference.**
+
+| The list holds…                       | Narrowed…                          | Screens                                                         |
+| :------------------------------------ | :--------------------------------- | :-------------------------------------------------------------- |
+| one **slice** of a longer list (§12.6) | **on the server**, `?q=` / `?state=` | lessons · students · progress · approvals · a course · Discover |
+| the **whole** list, already fetched    | in a `computed`, in the browser     | your courses · your marks · one student's marks                 |
+
+A screen holding six of forty rows cannot answer *"where is Sara"* from what it has drawn — Sara may be in slice five — so a paged list sends the term and starts again from the top, and `total` becomes the number of matches. A list that arrives whole, because it is bounded by how many courses one student can join, filters what it already has and makes no second request.
+
+**What each screen offers:** lessons by title, filtered **open / scheduled / draft**; students by name or email; progress by name, filtered **not started / in progress / complete**; the approvals queue by name, subject or email, *within* the standing tab; a course's lessons by title, filtered **marked / not marked**; a student's marks and your own marks by lesson (and teacher), filtered **passed / failed**; your courses by teacher; Discover by name or subject, as before.
+
+**Three rules keep it honest.**
+
+- **Nothing widens what a caller may see.** Each search is a `LIKE '%term%'` over columns that screen already shows, on the query that already carries the ownership filter. On a student's course the term and the marked/unmarked filter are applied to `db.Lessons` **before** `LessonQueries.VisibleTo`, so a lesson whose moment has not come cannot be searched into view.
+- **A state is computed where the row is computed.** Progress's *complete* is decided in SQL from the same mark count the row carries, so a student cannot be filtered in as complete and drawn as *3 of 8*. In a course with no lessons, *complete* matches nobody rather than everybody — `0 >= 0` is true and would have been wrong.
+- **A narrowed list cannot be reordered.** `PUT /api/teacher/lessons/{id}/move` swaps a lesson with **its neighbour in the course** (§4), and on a filtered screen the row above is not that neighbour. The arrows are disabled while a search or a filter is in force, with a line on the page saying so — the alternative is an arrow that moves a lesson past something the teacher cannot see.
+
+**The controls appear once there is more than one row to tell apart, and stay while a term or a filter is in force** — a search that matched nothing must never take away the control that would undo it. Every screen's empty message names which of the two emptied it, because *"no lesson's title matches …"* and *"no lessons yet"* ask for different next actions.
+
+**What it cost.** Six new optional query parameters, three service signatures, and one component. No new endpoint, no new table, no change to any existing response shape — an unsearched list is byte-for-byte what it was, which is why §12.6's cursor walk and the two client specs still pass untouched.
 
 ## Appendix C — The public directory is the first anonymous read path beyond `/api/public/home`
 

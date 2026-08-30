@@ -2,7 +2,7 @@ namespace TeachMe.Api.Features.Admin.Services;
 
 public interface ITeacherApprovalService
 {
-    Task<CursorPage<TeacherSummaryDto>> ListAsync(string? status, string? cursor, int? limit, CancellationToken ct);
+    Task<CursorPage<TeacherSummaryDto>> ListAsync(string? status, string? cursor, int? limit, string? q, CancellationToken ct);
     Task ApproveAsync(Guid teacherUserId, CancellationToken ct);
     Task RejectAsync(Guid teacherUserId, CancellationToken ct);
 }
@@ -13,8 +13,13 @@ public class TeacherApprovalService(AppDbContext db, ICurrentUser currentUser, T
     /// The queue an administrator works through, alphabetical, a slice at a time. Deciding on a
     /// teacher takes them out of the Pending list, which is exactly why this is keyset and not
     /// offset: approving the tenth row must not push the eleventh past a boundary unseen.
+    ///
+    /// <paramref name="q"/> searches the three fields the table shows and a decision is made on:
+    /// the name, the subject, and the email address. It applies within the standing being
+    /// looked at rather than across all three, because the tabs are the queue and searching is
+    /// how a long queue is worked, not a way out of it.
     /// </summary>
-    public async Task<CursorPage<TeacherSummaryDto>> ListAsync(string? status, string? cursor, int? limit, CancellationToken ct)
+    public async Task<CursorPage<TeacherSummaryDto>> ListAsync(string? status, string? cursor, int? limit, string? q, CancellationToken ct)
     {
         var take = Cursor.NormalizeLimit(limit);
         var key = Cursor.Read(cursor, fields: 2);
@@ -23,6 +28,15 @@ public class TeacherApprovalService(AppDbContext db, ICurrentUser currentUser, T
         if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<TeacherStatus>(status, true, out var parsed))
         {
             query = query.Where(t => t.Status == parsed);
+        }
+
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var term = q.Trim();
+            query = query.Where(t =>
+                EF.Functions.Like(t.User.FullName, $"%{term}%") ||
+                EF.Functions.Like(t.User.Email, $"%{term}%") ||
+                (t.Subject != null && EF.Functions.Like(t.Subject, $"%{term}%")));
         }
 
         int? total = key is null ? await query.CountAsync(ct) : null;

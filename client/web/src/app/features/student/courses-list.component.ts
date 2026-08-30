@@ -1,17 +1,20 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { StatePanelComponent } from '../../shared/state-panel.component';
+import { ListSearchComponent } from '../../shared/list-search.component';
 import { CourseSummary, ProblemDetails } from '../../core/models';
 import { problemFrom } from '../../core/interceptors/error.interceptor';
 
 @Component({
   selector: 'app-courses-list',
   standalone: true,
-  imports: [DatePipe, RouterLink, MatButtonModule, MatIconModule, StatePanelComponent],
+  imports: [
+    DatePipe, RouterLink, MatButtonModule, MatIconModule, StatePanelComponent, ListSearchComponent
+  ],
   template: `
     <div class="page-head">
       <div class="page-head__text">
@@ -23,13 +26,24 @@ import { problemFrom } from '../../core/interceptors/error.interceptor';
       </div>
     </div>
 
-    <app-state-panel [loading]="loading()" [error]="error()" [empty]="(rows()?.length ?? 0) === 0"
+    <!-- The whole list is already here — a student is on a handful of courses, not a page of
+         them — so the box narrows what is on screen rather than asking the server again. -->
+    @if (controlsVisible()) {
+      <div class="list-controls">
+        <app-list-search placeholder="Search your courses by teacher…"
+          label="Search your courses by teacher name" (search)="onSearch($event)"></app-list-search>
+      </div>
+    }
+
+    <app-state-panel [loading]="loading()" [error]="error()" [empty]="visible().length === 0"
       emptyIcon="school" (retry)="load()"
-      emptyMessage="You're not on any course yet. Enter your teacher's joining code to get started.">
-      <a emptyAction mat-flat-button color="primary" routerLink="/student/join">Enter a joining code</a>
+      [emptyMessage]="emptyMessage()">
+      @if (!query()) {
+        <a emptyAction mat-flat-button color="primary" routerLink="/student/join">Enter a joining code</a>
+      }
 
       <div class="grid">
-        @for (c of rows(); track c.teacherUserId) {
+        @for (c of visible(); track c.teacherUserId) {
           <a [routerLink]="['/student/courses', c.teacherUserId]" class="course">
             <span class="course__mark"><mat-icon>school</mat-icon></span>
             <h2 class="course__name">{{ c.teacherFullName }}</h2>
@@ -84,11 +98,35 @@ export class CoursesListComponent implements OnInit {
   loading = signal(true);
   error = signal<ProblemDetails | null>(null);
   rows = signal<CourseSummary[] | null>(null);
+  /** What is in the search box, applied here rather than at the server. */
+  readonly query = signal('');
+
+  /** The cards on screen: every course, or the ones whose teacher matches what was typed. */
+  readonly visible = computed(() => {
+    const all = this.rows() ?? [];
+    const term = this.query().toLocaleLowerCase();
+    if (!term) return all;
+    return all.filter(c => c.teacherFullName.toLocaleLowerCase().includes(term));
+  });
 
   private http = inject(HttpClient);
 
   ngOnInit(): void {
     this.load();
+  }
+
+  controlsVisible(): boolean {
+    return (this.rows()?.length ?? 0) > 1 || this.query().length > 0;
+  }
+
+  emptyMessage(): string {
+    return this.query()
+      ? `None of your courses is taught by anybody matching "${this.query()}".`
+      : "You're not on any course yet. Enter your teacher's joining code to get started.";
+  }
+
+  onSearch(term: string): void {
+    this.query.set(term);
   }
 
   load(): void {

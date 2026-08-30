@@ -9,8 +9,9 @@ namespace TeachMe.Api.Features.Teacher.Controllers;
 public class StudentsController(ITeacherStudentService students) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<TeacherStudentsResponse>> List([FromQuery] string? cursor, [FromQuery] int? limit, CancellationToken ct) =>
-        Ok(await students.ListAsync(cursor, limit, ct));
+    public async Task<ActionResult<TeacherStudentsResponse>> List(
+        [FromQuery] string? cursor, [FromQuery] int? limit, [FromQuery] string? q, CancellationToken ct) =>
+        Ok(await students.ListAsync(cursor, limit, q, ct));
 
     [HttpGet("{studentId:guid}")]
     public async Task<ActionResult<StudentProfileDto>> Detail(Guid studentId, CancellationToken ct) =>

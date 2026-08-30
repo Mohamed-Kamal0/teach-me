@@ -9,8 +9,10 @@ namespace TeachMe.Api.Features.Teacher.Controllers;
 public class LessonsController(ILessonService lessons) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<CursorPage<LessonDto>>> List([FromQuery] string? cursor, [FromQuery] int? limit, CancellationToken ct) =>
-        Ok(await lessons.ListAsync(cursor, limit, ct));
+    public async Task<ActionResult<CursorPage<LessonDto>>> List(
+        [FromQuery] string? cursor, [FromQuery] int? limit, [FromQuery] string? q,
+        [FromQuery] string? state, CancellationToken ct) =>
+        Ok(await lessons.ListAsync(cursor, limit, q, state, ct));
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<LessonDto>> Get(Guid id, CancellationToken ct) =>

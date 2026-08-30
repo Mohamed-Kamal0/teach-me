@@ -10,8 +10,9 @@ public class AdminController(ITeacherApprovalService teachers) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<CursorPage<TeacherSummaryDto>>> List(
-        [FromQuery] string? status, [FromQuery] string? cursor, [FromQuery] int? limit, CancellationToken ct) =>
-        Ok(await teachers.ListAsync(status, cursor, limit, ct));
+        [FromQuery] string? status, [FromQuery] string? cursor, [FromQuery] int? limit,
+        [FromQuery] string? q, CancellationToken ct) =>
+        Ok(await teachers.ListAsync(status, cursor, limit, q, ct));
 
     [HttpPost("{id:guid}/approve")]
     public async Task<IActionResult> Approve(Guid id, CancellationToken ct)

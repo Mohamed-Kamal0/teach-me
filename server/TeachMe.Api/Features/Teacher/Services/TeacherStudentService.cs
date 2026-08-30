@@ -2,7 +2,7 @@ namespace TeachMe.Api.Features.Teacher.Services;
 
 public interface ITeacherStudentService
 {
-    Task<TeacherStudentsResponse> ListAsync(string? cursor, int? limit, CancellationToken ct);
+    Task<TeacherStudentsResponse> ListAsync(string? cursor, int? limit, string? q, CancellationToken ct);
     Task<StudentProfileDto> GetProfileAsync(Guid studentId, CancellationToken ct);
 }
 
@@ -13,8 +13,13 @@ public class TeacherStudentService(AppDbContext db, ICurrentUser currentUser) : 
     /// code rides along on every slice rather than only the first: it is the one thing on the
     /// screen that is not a row, and re-sending a six-character string costs less than the
     /// branch that would avoid it.
+    ///
+    /// <paramref name="q"/> matches a name or an email address — one box, because a teacher
+    /// hunting for somebody types whichever of the two they can remember. It narrows the roster
+    /// before the cursor does its work, so the walk is over the matches and the total is the
+    /// number of them.
     /// </summary>
-    public async Task<TeacherStudentsResponse> ListAsync(string? cursor, int? limit, CancellationToken ct)
+    public async Task<TeacherStudentsResponse> ListAsync(string? cursor, int? limit, string? q, CancellationToken ct)
     {
         var teacherId = currentUser.UserId;
         var take = Cursor.NormalizeLimit(limit);
@@ -23,6 +28,14 @@ public class TeacherStudentService(AppDbContext db, ICurrentUser currentUser) : 
         var joinCode = await db.Teachers.Where(t => t.UserId == teacherId).Select(t => t.JoinCode).FirstAsync(ct);
 
         var enrollments = db.Enrollments.Where(e => e.TeacherUserId == teacherId);
+
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var term = q.Trim();
+            enrollments = enrollments.Where(e =>
+                EF.Functions.Like(e.Student.User.FullName, $"%{term}%") ||
+                EF.Functions.Like(e.Student.User.Email, $"%{term}%"));
+        }
 
         int? total = key is null ? await enrollments.CountAsync(ct) : null;
 

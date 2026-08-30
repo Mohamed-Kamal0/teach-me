@@ -20,7 +20,7 @@ Every feature below is written to the same shape, so you can read one without re
 
 ## Contents
 
-- [0. Eight mechanisms every feature uses](#0-eight-mechanisms-every-feature-uses)
+- [0. Nine mechanisms every feature uses](#0-nine-mechanisms-every-feature-uses)
 - [1. Getting in](#1-getting-in) — register · sign in · the session · sign out · resetting your password
 - [2. The administrator](#2-the-administrator) — approving and refusing teachers
 - [3. The teacher](#3-the-teacher) — standing · lessons · moments · order · students · marks · progress
@@ -32,7 +32,7 @@ Every feature below is written to the same shape, so you can read one without re
 
 ---
 
-## 0. Eight mechanisms every feature uses
+## 0. Nine mechanisms every feature uses
 
 Read these once and the rest of the file gets shorter. Each is built in **one place**, so no feature
 can implement it slightly differently.
@@ -379,6 +379,66 @@ the first slice and not the second, and that an invented cursor is a 400. `Lesso
 the same down a course, across a reorder. `core/cursor-list.spec.ts` pins the client half:
 appending, the stale-response guard, the two error paths, and the refresh length.
 
+### 0.9 Every list can be searched, and most can be filtered
+
+A list long enough to scroll (§0.8) is a list somebody will want to search, so **every list in the
+app carries the same control band above it**: one search box on the left, and where the rows have a
+state worth separating, one filter group on the right.
+
+**One box, one component.** `shared/list-search.component.ts` is the box — a pill holding a
+magnifier, the text, a clear button and an arrow — and it is the only one. It began on Discover
+(§6.2) and every other screen now uses it, which is why they all behave identically: typing settles
+for **250ms** before it asks, the arrow and the **Enter** key skip that wait, clear takes effect at
+once, and a term that has already been asked is never asked twice.
+
+**Where the narrowing happens depends on where the rows are.**
+
+| The list holds…                              | Search runs…                     | Screens                                                         |
+| :-------------------------------------------- | :--------------------------------- | :-------------------------------------------------------------- |
+| one **slice** of a longer list (§0.8)         | **on the server**, as `?q=`        | lessons · students · progress · approvals · a course · Discover |
+| the **whole** list, already fetched           | in the browser, over rows in hand  | your courses · your marks · one student's marks                 |
+
+The split is not a preference. A screen holding six of forty rows cannot answer *"where is Sara"* by
+filtering what it has drawn — Sara may be in slice five. So a paged list sends the term to the
+server and **starts again from the top** (`CursorList.start()`), and `total` becomes the count of
+matches. A list that is already complete in the browser — a student is on a handful of courses, not
+a page of them — filters in a `computed` and asks for nothing.
+
+**Filters are the same shape everywhere:** a Material button-toggle group whose first option is
+**All**, sent as `?state=` on the paged lists and applied in the same `computed` on the whole ones.
+An unrecognised value is treated as "all" rather than refused — the same leniency `?status=` on the
+approvals queue has always had.
+
+| Screen                        | Search matches               | Filter                                     |
+| :---------------------------- | :--------------------------- | :----------------------------------------- |
+| `/teacher/lessons`            | title                        | All · Open · Scheduled · Draft              |
+| `/teacher/students`           | name **or** email            | —                                          |
+| `/teacher/progress`           | name                         | All · Not started · In progress · Complete |
+| `/teacher/students/:id`       | lesson title                 | All · Passed · Failed                      |
+| `/admin/approvals`            | name, subject **or** email   | the standing tabs it already had           |
+| `/student/courses`            | teacher name                 | —                                          |
+| `/student/courses/:teacherId` | lesson title                 | All · Marked · Not marked                  |
+| `/student/marks`              | lesson **or** teacher        | All · Passed · Failed                      |
+| `/discover`                   | teacher name **or** subject  | —                                          |
+
+**The controls appear once there is something to tell apart** — more than one row — **and stay while
+a term or a filter is in force**, so a search that matched nothing can never take away the control
+that would undo it. Each screen's empty message says which of the two emptied it: *"No lesson's
+title matches..."* is a different sentence from *"No lessons yet."*, and only one of them is worth a
+**New lesson** button.
+
+**A narrowed list is a list you cannot reorder.** On `/teacher/lessons` the up/down arrows go
+**disabled** while a search or a filter is in force, with a line saying why. The server swaps a
+lesson with **its neighbour in the course** (§3.4); on a filtered screen the row above is not that
+neighbour, so an arrow that looked local would move the lesson past something the teacher cannot
+see. Nothing else on any screen changes behaviour when narrowed.
+
+**Nothing here widens what anybody may see.** On the student's course view the search and the
+marked/unmarked filter are applied to `db.Lessons` **before** `LessonQueries.VisibleTo` (§0.2), so
+they narrow within what is already permitted — a lesson whose moment has not come cannot be searched
+into view. Every server-side search is a `LIKE '%term%'` over the columns that screen already shows,
+under the same ownership filter the unsearched list runs with.
+
 ---
 
 ## 1. Getting in
@@ -711,6 +771,12 @@ The subject column is there so the decision is not made on a name alone — what
 teach is most of what an administrator has to go on. A teacher whose row predates the field shows an
 em dash, never an empty cell.
 
+**Searching the queue** (§0.9): the box above the table matches a name, a subject or an email and is
+sent as `?q=`, applied **within** the standing being looked at rather than across all three — the
+tabs are the queue, and searching is how a long queue is worked, not a way out of it. The term
+survives a change of tab, so an administrator who has just decided on somebody can check it took
+without typing their name a second time.
+
 **The calls:**
 
 ```
@@ -766,6 +832,13 @@ reachable — the title and the rail in the list both lead here) · `/teacher/le
 A teacher's payload carries every URL whatever the clock says, so `/teacher/lessons/:id` is not a
 rehearsal of the student's screen; beside each link it says the moment a student gets it, and
 `Open` there is a statement about students rather than about the person reading it.
+
+**Searching and filtering the list** (§0.9): `?q=` matches a title, and `?state=` narrows to one
+moment in a lesson's life — **Open** (`OpensAtUtc` has passed), **Scheduled** (dated, still ahead)
+or **Draft** (no date at all, which is what a lesson written but not yet promised to anybody looks
+like). Both are applied before the cursor, so the walk is over the narrowed course. While either is
+in force **the reorder arrows are disabled**, for the reason §3.4 gives: the row above is no longer
+the neighbour the server would swap with.
 
 **The calls:**
 
@@ -921,13 +994,19 @@ characters costs less than the branch that would avoid it.
 **The server:** the list is `Enrollments` where `TeacherUserId == CurrentUser.UserId`. The code comes
 from the caller's own `Teacher` row, so it is impossible to serve someone else's.
 
+**Searching it** (§0.9): `?q=` matches **the name or the email** — one box over both columns, because
+a teacher hunting for somebody types whichever half they can remember. It narrows the roster before
+the cursor does its work, so the walk is over the matches and `total` is the number of them.
+
 ### 3.6 One student, as a profile
 
 **Who:** approved teachers, on their own students only.
 **The screen:** `/teacher/students/:studentId` — **the row opens a person, not a dead end**: photo,
 name, display name, email, phone, bio, joined-at, then the counts (*3 of 8 lessons marked · 2 passed
 · 1 failed*), then every mark in lesson order with pass/fail against **that lesson's own** pass
-mark, and an inline correction control.
+mark, and an inline correction control. With more than one mark the table gets the same band as
+every other list (§0.9) — a box that matches the lesson title, and **All · Passed · Failed** — both
+applied in the browser, because every mark this teacher gave this student is already on the page.
 
 **The call:** `GET /api/teacher/students/{studentId}` → **200**
 
@@ -1017,6 +1096,12 @@ marks yet **reads zero** — it does not vanish and it does not spin forever.
 **The server:** `totalLessons` is the caller's own lesson count; the marks are joined by
 `m.Lesson.TeacherUserId == teacherId` so nothing from another course can be counted. Photos are
 fetched as one `ETag` lookup keyed by student, not one query per row.
+
+**Searching and filtering it** (§0.9): `?q=` matches a student's name, and `?state=` keeps
+**Not started** (no mark at all), **In progress** (some, not all) or **Complete** (every lesson
+marked). The state is decided **in the database**, off the same count the rows carry — so a student
+cannot be filtered in as complete and then drawn as *3 of 8*. "Complete" matches nobody in a course
+with no lessons in it, rather than everybody, which is what `0 >= 0` would otherwise say.
 
 ### 3.9 A teacher's own profile, photo and password
 
@@ -1134,6 +1219,10 @@ state points at `/student/join`.
 projection the lesson list uses, so **the number on the card and the number of rows inside the course
 cannot drift apart**.
 
+**Searching it** (§0.9): with more than one card, a box narrows them by teacher name. This list is
+not paged — a student is on a handful of courses — so the filtering happens in the browser and no
+second request is made.
+
 ### 4.4 Inside one course — and the requirement that cannot be faked
 
 **Who:** students **enrolled with that teacher**. The `EnrolledInCourse` policy handler reads the
@@ -1163,6 +1252,11 @@ POST /api/student/courses/{teacherId}/seen           → 204
 what is coming, and a lesson with no quiz **says nothing about quizzes at all** — because the client
 has been sent nothing to say it with. `MediaEmbedComponent` wraps the recording, so a link that will
 not embed shows a message and a plain link rather than a dead grey box.
+
+**Searching and filtering it** (§0.9): `?q=` matches a lesson title and `?state=` keeps **Marked**
+or **Not marked** — this student's own mark, the same one the row shows. Both are applied to
+`db.Lessons` **before** `VisibleTo`, which is the point: they narrow inside what the student may
+already see, and no term reaches a lesson whose moment has not come.
 
 **When it fails:** **403** *not on this course* — from the policy handler, **not an empty list**,
 because an empty list tells someone never entitled to ask that the course is empty. **404** for a
@@ -1206,6 +1300,10 @@ score out of that lesson's maximum, and passed or failed against that lesson's o
 
 **The server:** `db.Marks.Where(m => m.StudentUserId == CurrentUser.UserId)`. The route carries no id,
 so there is nothing to tamper with — **only the cookie says who is asking**.
+
+**Searching and filtering it** (§0.9): a box over **the lesson and the teacher** — the two columns a
+mark is looked up by — and **All · Passed · Failed**. Both run in the browser: this list is not
+paged, so every mark is already in hand.
 
 ---
 
@@ -1634,23 +1732,23 @@ answers **401** signed out. Every non-`GET` additionally answers **400** without
 | `GET /api/public/teachers?cursor=&limit=&q=`        | anyone, no cookie  | 200 one slice, approved only, incl. `phone`; `?q=` **name or subject** | 400 invented cursor · — legitimately empty | 6.2 |
 | `GET /api/public/teachers/{userId}/photo`           | anyone, no cookie  | 200 webp, `public, max-age=300` · 304          | **404** for "no photo" **and** "not approved", identically  | 6.3  |
 | `GET /api/health`                                   | anyone, no cookie  | 200 `{status, db}`                             | 503 database unreachable                                    | 6.4  |
-| `GET /api/admin/teachers?status=&cursor=&limit=`    | Admin              | 200 one slice, name asc                        | 400 invented cursor, 403                                    | 2.1  |
+| `GET /api/admin/teachers?status=&cursor=&limit=&q=` | Admin             | 200 one slice, name asc; `?q=` **name, subject or email**, within the standing | 400 invented cursor, 403                | 2.1 |
 | `POST /api/admin/teachers/{id}/approve`             | Admin              | 204                                            | 403, 404, **409 already decided**                           | 2.1  |
 | `POST /api/admin/teachers/{id}/reject`              | Admin              | 204                                            | 403, 404, **409 already decided**                           | 2.1  |
-| `GET /api/teacher/lessons?cursor=&limit=`           | Teacher · Approved | 200 one slice, `OrderIndex` asc                | 400 invented cursor, 403 pending / turned away              | 3.2  |
+| `GET /api/teacher/lessons?cursor=&limit=&q=&state=` | Teacher · Approved | 200 one slice, `OrderIndex` asc; `?q=` **title**, `?state=` `open` \| `scheduled` \| `draft` | 400 invented cursor, 403 pending / turned away | 3.2 |
 | `POST /api/teacher/lessons`                         | Teacher · Approved | 201                                            | 400 L1–L12, 403                                             | 3.2–3.3 |
 | `GET` `PUT /api/teacher/lessons/{id}`               | Teacher · Approved | 200                                            | 400 L1–L12, **404 not theirs**, 403                         | 3.2  |
 | `PUT /api/teacher/lessons/{id}/move`                | Teacher · Approved | 204 — swap through a parked index, one transaction | **404 not theirs**, 403                                 | 3.4  |
 | `DELETE /api/teacher/lessons/{id}`                  | Teacher · Approved | 204                                            | **409 marks exist**, 404, 403                               | 3.2  |
-| `GET /api/teacher/students?cursor=&limit=`          | Teacher · Approved | 200 `{joinCode, students}` one slice, name asc | 400 invented cursor, 403                                    | 3.5  |
+| `GET /api/teacher/students?cursor=&limit=&q=`       | Teacher · Approved | 200 `{joinCode, students}` one slice, name asc; `?q=` **name or email** | 400 invented cursor, 403           | 3.5  |
 | `GET /api/teacher/students/{studentId}`             | Teacher · Approved | 200 profile + marks in lesson order            | **404** unknown or not theirs, 403                          | 3.6  |
 | `POST /api/teacher/marks`                           | Teacher · Approved | 201                                            | 400 out of range, **409 duplicate**, 404 not your student/lesson | 3.7 |
 | `PUT /api/teacher/marks/{id}`                       | Teacher · Approved | 200 + `UpdatedAtUtc`                           | 400, 404, 403                                               | 3.7  |
-| `GET /api/teacher/progress?cursor=&limit=`          | Teacher · Approved | 200 one slice (reads `0`, never spins)         | 400 invented cursor, 403                                    | 3.8  |
+| `GET /api/teacher/progress?cursor=&limit=&q=&state=` | Teacher · Approved | 200 one slice (reads `0`, never spins); `?q=` **name**, `?state=` `notstarted` \| `inprogress` \| `complete` | 400 invented cursor, 403 | 3.8 |
 | `GET` `PUT /api/student/profile`                    | Student            | 200                                            | 400, 403                                                    | 4.1  |
 | `POST /api/student/enrollments`                     | Student            | 201                                            | 400 unknown code / not approved, **409 already on it**      | 4.2  |
 | `GET /api/student/courses`                          | Student            | 200 (legitimately empty)                       | 403                                                         | 4.3  |
-| `GET /api/student/courses/{teacherId}/lessons`      | Student · Enrolled | 200 one slice — **open lessons only**          | **403 not on this course** (never an empty list)            | 4.4  |
+| `GET /api/student/courses/{teacherId}/lessons?cursor=&limit=&q=&state=` | Student · Enrolled | 200 one slice — **open lessons only**; `?q=` **title**, `?state=` `marked` \| `unmarked` | **403 not on this course** (never an empty list) | 4.4 |
 | `GET /api/student/courses/{teacherId}/lessons/{id}` | Student · Enrolled | 200                                            | 403 not enrolled, **404 not open yet**                      | 4.4  |
 | `POST /api/student/courses/{teacherId}/seen`        | Student · Enrolled | 204 — stamps **that** `LastViewedAtUtc`        | 403                                                         | 4.5  |
 | `GET /api/student/whats-new`                        | Student            | 200 per-course + total                         | 403                                                         | 4.5  |

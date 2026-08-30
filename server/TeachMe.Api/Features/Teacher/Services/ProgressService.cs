@@ -2,7 +2,7 @@ namespace TeachMe.Api.Features.Teacher.Services;
 
 public interface IProgressService
 {
-    Task<CursorPage<ProgressDto>> GetAsync(string? cursor, int? limit, CancellationToken ct);
+    Task<CursorPage<ProgressDto>> GetAsync(string? cursor, int? limit, string? q, string? state, CancellationToken ct);
 }
 
 public class ProgressService(AppDbContext db, ICurrentUser currentUser) : IProgressService
@@ -11,8 +11,13 @@ public class ProgressService(AppDbContext db, ICurrentUser currentUser) : IProgr
     /// One row per enrolled student, walked in the same order as the roster list so a cursor
     /// means the same thing on both screens. The marks and the photos are fetched for the slice
     /// only — the two follow-up queries are bounded by the page, not by the class size.
+    ///
+    /// <paramref name="q"/> matches a student's name, and <paramref name="state"/> narrows to
+    /// where they have got to — nobody marked yet, part way, or every lesson marked. The state
+    /// is decided in the database from the same count the rows carry, so a student cannot be
+    /// filtered in as "complete" and then drawn as 3 of 8.
     /// </summary>
-    public async Task<CursorPage<ProgressDto>> GetAsync(string? cursor, int? limit, CancellationToken ct)
+    public async Task<CursorPage<ProgressDto>> GetAsync(string? cursor, int? limit, string? q, string? state, CancellationToken ct)
     {
         var teacherId = currentUser.UserId;
         var take = Cursor.NormalizeLimit(limit);
@@ -21,6 +26,26 @@ public class ProgressService(AppDbContext db, ICurrentUser currentUser) : IProgr
         var totalLessons = await db.Lessons.CountAsync(l => l.TeacherUserId == teacherId, ct);
 
         var enrollments = db.Enrollments.Where(e => e.TeacherUserId == teacherId);
+
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var term = q.Trim();
+            enrollments = enrollments.Where(e => EF.Functions.Like(e.Student.User.FullName, $"%{term}%"));
+        }
+
+        // "Complete" means nothing in a course with no lessons in it, so it matches nobody
+        // rather than everybody — which is what `marked >= totalLessons` would say for 0 >= 0.
+        enrollments = state?.Trim().ToLowerInvariant() switch
+        {
+            "notstarted" => enrollments.Where(e => !e.Student.Marks.Any(m => m.Lesson.TeacherUserId == teacherId)),
+            "inprogress" => enrollments.Where(e =>
+                e.Student.Marks.Count(m => m.Lesson.TeacherUserId == teacherId) > 0
+                && e.Student.Marks.Count(m => m.Lesson.TeacherUserId == teacherId) < totalLessons),
+            "complete" => enrollments.Where(e =>
+                totalLessons > 0
+                && e.Student.Marks.Count(m => m.Lesson.TeacherUserId == teacherId) >= totalLessons),
+            _ => enrollments
+        };
 
         int? total = key is null ? await enrollments.CountAsync(ct) : null;
 

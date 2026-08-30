@@ -3,18 +3,23 @@ import { HttpClient } from '@angular/common/http';
 import { Router, RouterLink } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { StatePanelComponent } from '../../shared/state-panel.component';
 import { ScrollMoreComponent } from '../../shared/scroll-more.component';
+import { ListSearchComponent } from '../../shared/list-search.component';
 import { AvatarComponent } from '../../shared/avatar.component';
 import { CursorPage, ProgressRow } from '../../core/models';
 import { CursorList } from '../../core/cursor-list';
+
+/** How far through the course a student has been marked. */
+type ProgressState = 'all' | 'notstarted' | 'inprogress' | 'complete';
 
 @Component({
   selector: 'app-progress',
   standalone: true,
   imports: [
-    RouterLink, MatTableModule, MatProgressBarModule, StatePanelComponent, ScrollMoreComponent,
-    AvatarComponent
+    RouterLink, MatTableModule, MatProgressBarModule, MatButtonToggleModule, StatePanelComponent,
+    ScrollMoreComponent, ListSearchComponent, AvatarComponent
   ],
   template: `
     <div class="page-head">
@@ -25,9 +30,27 @@ import { CursorList } from '../../core/cursor-list';
       </div>
     </div>
 
+    @if (controlsVisible()) {
+      <div class="list-controls">
+        <app-list-search placeholder="Search students by name…"
+          label="Search the class by student name" (search)="onSearch($event)"></app-list-search>
+        <div class="list-controls__filters">
+          <!-- The question this screen is opened to answer is "who is behind", so the filter is
+               how far each student has got rather than anything about the marks themselves. -->
+          <mat-button-toggle-group [value]="state()" (change)="setState($event.value)"
+            aria-label="Filter students by how far they have been marked">
+            <mat-button-toggle value="all">All</mat-button-toggle>
+            <mat-button-toggle value="notstarted">Not started</mat-button-toggle>
+            <mat-button-toggle value="inprogress">In progress</mat-button-toggle>
+            <mat-button-toggle value="complete">Complete</mat-button-toggle>
+          </mat-button-toggle-group>
+        </div>
+      </div>
+    }
+
     <app-state-panel [loading]="list.loading()" [error]="list.error()" [empty]="list.rows().length === 0"
       emptyIcon="insights" (retry)="list.start()"
-      emptyMessage="No students have joined yet, so there's nothing to show.">
+      [emptyMessage]="emptyMessage()">
       <div class="table-wrap">
         <table mat-table [dataSource]="list.rows()" class="data-table">
           <ng-container matColumnDef="fullName">
@@ -92,16 +115,47 @@ import { CursorList } from '../../core/cursor-list';
 export class ProgressComponent implements OnInit {
   columns = ['fullName', 'progress', 'passed', 'failed'];
 
+  /** What the rows on screen were fetched with. Both go to the server: the table holds one
+   *  slice of the class, so narrowing what has been scrolled to would answer "who is behind"
+   *  with only the students already drawn. */
+  readonly query = signal('');
+  readonly state = signal<ProgressState>('all');
+
   private http = inject(HttpClient);
   private router = inject(Router);
 
   readonly list = new CursorList<ProgressRow>((cursor, limit) => {
     const params = new URLSearchParams({ limit: String(limit) });
+    if (this.query()) params.set('q', this.query());
+    if (this.state() !== 'all') params.set('state', this.state());
     if (cursor) params.set('cursor', cursor);
     return this.http.get<CursorPage<ProgressRow>>(`/api/teacher/progress?${params}`);
   });
 
   ngOnInit(): void {
+    this.list.start();
+  }
+
+  controlsVisible(): boolean {
+    return this.list.total() > 1 || this.query().length > 0 || this.state() !== 'all';
+  }
+
+  emptyMessage(): string {
+    if (this.query()) return `No student's name matches "${this.query()}".`;
+    if (this.state() === 'notstarted') return 'Every student has at least one lesson marked.';
+    if (this.state() === 'inprogress') return 'Nobody is part way through — they are either unmarked or finished.';
+    if (this.state() === 'complete') return 'Nobody has been marked on every lesson yet.';
+    return "No students have joined yet, so there's nothing to show.";
+  }
+
+  /** A new term, or a new filter, is a different list — so it starts from the top. */
+  onSearch(term: string): void {
+    this.query.set(term);
+    this.list.start();
+  }
+
+  setState(state: ProgressState): void {
+    this.state.set(state);
     this.list.start();
   }
 

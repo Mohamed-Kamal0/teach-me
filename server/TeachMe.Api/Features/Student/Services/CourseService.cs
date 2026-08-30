@@ -3,7 +3,7 @@ namespace TeachMe.Api.Features.Student.Services;
 public interface ICourseService
 {
     Task<List<CourseSummaryDto>> ListAsync(CancellationToken ct);
-    Task<CursorPage<StudentLessonWithMarkDto>> GetLessonsAsync(Guid teacherId, string? cursor, int? limit, CancellationToken ct);
+    Task<CursorPage<StudentLessonWithMarkDto>> GetLessonsAsync(Guid teacherId, string? cursor, int? limit, string? q, string? state, CancellationToken ct);
     Task<StudentLessonWithMarkDto> GetLessonAsync(Guid teacherId, Guid lessonId, CancellationToken ct);
     Task MarkSeenAsync(Guid teacherId, CancellationToken ct);
 }
@@ -39,15 +39,37 @@ public class CourseService(AppDbContext db, ICurrentUser currentUser, TimeProvid
     /// The lessons a student may see, in teaching order, a slice at a time. VisibleTo already
     /// orders by OrderIndex and already drops the unopened, so the cursor is that one number and
     /// a lesson the teacher opens mid-scroll simply appears in its place on a later slice.
+    ///
+    /// <paramref name="q"/> matches a title and <paramref name="state"/> keeps either the
+    /// lessons that have been marked or the ones that have not. Both narrow the lessons *before*
+    /// VisibleTo does, so what is withheld is still withheld — a search cannot reach past the
+    /// one place that decides what a student may see.
     /// </summary>
-    public async Task<CursorPage<StudentLessonWithMarkDto>> GetLessonsAsync(Guid teacherId, string? cursor, int? limit, CancellationToken ct)
+    public async Task<CursorPage<StudentLessonWithMarkDto>> GetLessonsAsync(Guid teacherId, string? cursor, int? limit, string? q, string? state, CancellationToken ct)
     {
         var take = Cursor.NormalizeLimit(limit);
         var key = Cursor.Read(cursor, fields: 1);
         var studentId = currentUser.UserId;
         var now = clock.GetUtcNow();
 
-        var visible = db.Lessons.VisibleTo(teacherId, now);
+        var candidates = db.Lessons.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var term = q.Trim();
+            candidates = candidates.Where(l => EF.Functions.Like(l.Title, $"%{term}%"));
+        }
+
+        // "Marked" is this student's own mark and nobody else's — the same rule the score on
+        // each row is read under.
+        candidates = state?.Trim().ToLowerInvariant() switch
+        {
+            "marked" => candidates.Where(l => l.Marks.Any(m => m.StudentUserId == studentId)),
+            "unmarked" => candidates.Where(l => !l.Marks.Any(m => m.StudentUserId == studentId)),
+            _ => candidates
+        };
+
+        var visible = candidates.VisibleTo(teacherId, now);
 
         int? total = key is null ? await visible.CountAsync(ct) : null;
 

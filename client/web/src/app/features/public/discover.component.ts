@@ -1,11 +1,8 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { FormsModule } from '@angular/forms';
-import { Subject, debounceTime } from 'rxjs';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { MatIconModule } from '@angular/material/icon';
 import { StatePanelComponent } from '../../shared/state-panel.component';
 import { ScrollMoreComponent } from '../../shared/scroll-more.component';
+import { ListSearchComponent } from '../../shared/list-search.component';
 import { TeacherCardComponent } from './teacher-card.component';
 import { AuthService } from '../../core/auth.service';
 import { CourseSummary, CursorPage, PublicTeacher } from '../../core/models';
@@ -24,7 +21,7 @@ import { CursorList } from '../../core/cursor-list';
   selector: 'app-discover',
   standalone: true,
   imports: [
-    FormsModule, MatIconModule, StatePanelComponent, ScrollMoreComponent, TeacherCardComponent
+    StatePanelComponent, ScrollMoreComponent, ListSearchComponent, TeacherCardComponent
   ],
   template: `
     <div class="page-head">
@@ -39,29 +36,10 @@ import { CursorList } from '../../core/cursor-list';
          than one course to choose between: "who teaches chemistry" is a real question over six
          cards, where "which of these six is called Amina" was not. -->
     @if (searchable()) {
-      <!-- A plain input rather than <mat-form-field>: an outlined field is drawn from three
-           separate outline segments, and every rounded-pill variant of it here was a stack of
-           ::ng-deep overrides that Material could move out from under at any release. The
-           element below owes nothing to MDC, so the pill is simply a pill. No <label>: the
-           magnifier and the placeholder say what the box is, and the aria-label says it to a
-           screen reader. -->
-      <div class="search">
-        <mat-icon class="search__icon" aria-hidden="true">search</mat-icon>
-        <input class="search__input" [ngModel]="draft()" (ngModelChange)="onQuery($event)"
-          autocomplete="off" type="search" placeholder="Search by name or subject…"
-          aria-label="Search courses by teacher name or subject" (keyup.enter)="searchNow()" />
-        @if (draft()) {
-          <button type="button" class="search__clear" aria-label="Clear the search"
-            (click)="clear()">
-            <mat-icon>close</mat-icon>
-          </button>
-        }
-        <!-- Typing already searches, so this button is not the only way in — it is the way that
-             skips the 250ms wait. An arrow rather than a second magnifier: the icon at the front
-             of the box already said "search", and this one means "now". -->
-        <button type="button" class="search__go" aria-label="Search now" (click)="searchNow()">
-          <mat-icon>arrow_forward</mat-icon>
-        </button>
+      <div class="list-controls">
+        <app-list-search placeholder="Search by name or subject…"
+          label="Search courses by teacher name or subject"
+          (search)="onSearch($event)"></app-list-search>
       </div>
     }
 
@@ -80,90 +58,6 @@ import { CursorList } from '../../core/cursor-list';
     </app-state-panel>
   `,
   styles: [`
-    /* One control: a pill holding the magnifier, the text, and the two buttons. Everything sits
-       *inside* the border, so nothing overhangs an edge that a narrow screen can cut off, and
-       the box lines up with the card grid below it. */
-    .search {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      width: 100%;
-      max-width: 26rem;
-      margin: 0 0 1.25rem;
-      padding: 0.3rem 0.35rem 0.3rem 0.85rem;
-      background: var(--paper);
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      box-shadow: var(--shadow-1);
-      transition: border-color 140ms ease, box-shadow 140ms ease;
-    }
-    .search:hover { border-color: var(--primary); }
-
-    /* The ring is drawn on the box rather than on the input, because the input's own outline
-       would be drawn inside the pill. This is the field's focus indicator: hence the input
-       suppressing its own below. */
-    .search:focus-within {
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px var(--primary-wash);
-    }
-
-    .search__icon {
-      flex: none;
-      color: var(--muted);
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-    }
-
-    .search__input {
-      flex: 1 1 auto;
-      min-width: 0;
-      height: 2.25rem;
-      border: 0;
-      background: none;
-      color: inherit;
-      font: inherit;
-      font-size: var(--step-0);
-    }
-    .search__input:focus { outline: none; }
-    .search__input::placeholder { color: var(--muted); }
-    /* Chrome draws its own clear affordance on type="search"; ours is the one that resets the
-       page as well as the box. */
-    .search__input::-webkit-search-cancel-button { display: none; }
-
-    .search__clear,
-    .search__go {
-      display: grid;
-      place-items: center;
-      flex: none;
-      padding: 0;
-      border: 0;
-      border-radius: 999px;
-      cursor: pointer;
-      transition: background 140ms ease, color 140ms ease, transform 140ms ease;
-    }
-    .search__clear mat-icon,
-    .search__go mat-icon { font-size: 20px; width: 20px; height: 20px; }
-
-    .search__clear {
-      width: 2rem;
-      height: 2rem;
-      background: none;
-      color: var(--muted);
-    }
-    .search__clear:hover { background: var(--paper-sunk); color: var(--ink); }
-
-    .search__go {
-      width: 2.25rem;
-      height: 2.25rem;
-      background: var(--primary);
-      color: var(--on-primary);
-    }
-    /* --ink is body text, which on the dark ground is nearly white — hovering to it would turn
-       the button into a bright square. --primary-wash darkens on that ground instead, so the
-       hover stays a step away from the resting colour in the same direction on both. */
-    .search__go:hover { background: var(--primary-wash); color: var(--primary); }
-    .search__go:active { transform: scale(0.94); }
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(min(19rem, 100%), 1fr));
@@ -173,16 +67,12 @@ import { CursorList } from '../../core/cursor-list';
   `]
 })
 export class DiscoverComponent implements OnInit {
-  /** The term the rows on screen were fetched with. */
+  /** The term the rows on screen were fetched with. The box itself owns the half-typed one. */
   query = signal('');
-  /** What is in the box right now. It leads `query` by up to the debounce, which is exactly the
-   *  gap the button and the Enter key exist to close — both read this, never `query`. */
-  draft = signal('');
 
   /** The teacher ids a signed-in student is already on. Empty for everyone else. */
   enrolledIds = signal<Set<string>>(new Set());
 
-  private readonly typed = new Subject<string>();
   private http = inject(HttpClient);
   private auth = inject(AuthService);
 
@@ -192,25 +82,15 @@ export class DiscoverComponent implements OnInit {
     return this.http.get<CursorPage<PublicTeacher>>(`/api/public/teachers?${params}`);
   });
 
-  constructor() {
-    this.typed.pipe(debounceTime(250), takeUntilDestroyed()).subscribe(value => {
-      // A term the button or the Enter key already sent: re-fetching it would answer the same
-      // rows twice for one intention.
-      if (value === this.query()) return;
-      this.query.set(value);
-      this.list.start();
-    });
-  }
-
   ngOnInit(): void {
     this.list.start();
     this.loadEnrolments();
   }
 
-  /** True once there is more than one course to tell apart — and always while there is anything
-   *  in the box, so a search that matches nothing cannot take the box away with it. */
+  /** True once there is more than one course to tell apart — and always while a term is in
+   *  force, so a search that matches nothing cannot take the box away with it. */
   searchable(): boolean {
-    return this.list.total() > 1 || this.draft().length > 0;
+    return this.list.total() > 1 || this.query().length > 0;
   }
 
   emptyMessage(): string {
@@ -219,28 +99,9 @@ export class DiscoverComponent implements OnInit {
       : 'No courses have been published yet.';
   }
 
-  onQuery(value: string): void {
-    this.draft.set(value);
-    this.typed.next(value);
-  }
-
-  /** Pressing the button, or Enter, is somebody saying they have finished typing — so it goes
-   *  now rather than 250ms from now. The debounced stream is left alone; the worst it can do is
-   *  fire once more with the same term, which the server answers identically. */
-  searchNow(): void {
-    if (this.draft() === this.query()) return;
-    this.query.set(this.draft());
-    this.list.start();
-  }
-
-  /** The debounce exists to hold off on a request while somebody is still typing. Pressing clear
-   *  is not typing, so it takes effect at once rather than 250ms after the box is already empty. */
-  clear(): void {
-    if (!this.draft()) return;
-    this.draft.set('');
-    this.typed.next('');
-    if (this.query() === '') return;
-    this.query.set('');
+  /** A new term is a different list, so it starts from the top rather than re-reading this one. */
+  onSearch(term: string): void {
+    this.query.set(term);
     this.list.start();
   }
 

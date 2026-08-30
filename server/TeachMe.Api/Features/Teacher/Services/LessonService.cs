@@ -4,7 +4,7 @@ namespace TeachMe.Api.Features.Teacher.Services;
 
 public interface ILessonService
 {
-    Task<CursorPage<LessonDto>> ListAsync(string? cursor, int? limit, CancellationToken ct);
+    Task<CursorPage<LessonDto>> ListAsync(string? cursor, int? limit, string? q, string? state, CancellationToken ct);
     Task<LessonDto> GetAsync(Guid id, CancellationToken ct);
     Task<LessonDto> CreateAsync(LessonRequest request, CancellationToken ct);
     Task<LessonDto> UpdateAsync(Guid id, LessonRequest request, CancellationToken ct);
@@ -22,14 +22,39 @@ public class LessonService(
     /// A course in teaching order, a slice at a time. OrderIndex is unique per teacher — the
     /// database enforces it, and MoveAsync swaps through a parked value precisely to keep it
     /// so — which is what lets a single number serve as the whole cursor.
+    ///
+    /// <paramref name="q"/> matches a title, and <paramref name="state"/> narrows to one moment
+    /// in a lesson's life — open, still scheduled, or never given a date. Both are applied
+    /// before the cursor, so the walk is over the filtered course and not over a full one with
+    /// rows quietly missing from each slice. Changing either starts the list again from the top,
+    /// which is what the screen does.
     /// </summary>
-    public async Task<CursorPage<LessonDto>> ListAsync(string? cursor, int? limit, CancellationToken ct)
+    public async Task<CursorPage<LessonDto>> ListAsync(string? cursor, int? limit, string? q, string? state, CancellationToken ct)
     {
         var take = Cursor.NormalizeLimit(limit);
         var key = Cursor.Read(cursor, fields: 1);
         var teacherId = currentUser.UserId;
+        var now = clock.GetUtcNow();
 
         var lessons = db.Lessons.Where(l => l.TeacherUserId == teacherId);
+
+        // Substring rather than prefix: a teacher looking for "Trigonometry, part 2" types the
+        // word they remember, which is rarely the first one on the row.
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var term = q.Trim();
+            lessons = lessons.Where(l => EF.Functions.Like(l.Title, $"%{term}%"));
+        }
+
+        // A lesson with no date is a draft — written, not yet promised to anybody. Anything
+        // unrecognised is "all", the same leniency the admin queue gives an unknown status.
+        lessons = state?.Trim().ToLowerInvariant() switch
+        {
+            "open" => lessons.Where(l => l.OpensAtUtc != null && l.OpensAtUtc <= now),
+            "scheduled" => lessons.Where(l => l.OpensAtUtc != null && l.OpensAtUtc > now),
+            "draft" => lessons.Where(l => l.OpensAtUtc == null),
+            _ => lessons
+        };
 
         int? total = key is null ? await lessons.CountAsync(ct) : null;
 
@@ -44,7 +69,6 @@ public class LessonService(
         var hasMore = rows.Count > take;
         var items = hasMore ? rows[..take] : rows;
 
-        var now = clock.GetUtcNow();
         return new CursorPage<LessonDto>
         {
             Items = items.Select(l => ToDto(l, now)).ToList(),

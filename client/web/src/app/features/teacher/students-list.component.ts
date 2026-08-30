@@ -8,6 +8,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { StatePanelComponent } from '../../shared/state-panel.component';
 import { ScrollMoreComponent } from '../../shared/scroll-more.component';
+import { ListSearchComponent } from '../../shared/list-search.component';
 import { AvatarComponent } from '../../shared/avatar.component';
 import { StudentSummary, TeacherStudentsResponse } from '../../core/models';
 import { CursorList } from '../../core/cursor-list';
@@ -18,7 +19,7 @@ import { NotifyService } from '../../core/notify.service';
   standalone: true,
   imports: [
     DatePipe, RouterLink, MatTableModule, MatButtonModule, MatIconModule, StatePanelComponent,
-    ScrollMoreComponent, AvatarComponent
+    ScrollMoreComponent, ListSearchComponent, AvatarComponent
   ],
   template: `
     <div class="page-head">
@@ -46,9 +47,18 @@ import { NotifyService } from '../../core/notify.service';
       </div>
     }
 
+    @if (controlsVisible()) {
+      <div class="list-controls">
+        <!-- One box over both columns: a teacher looking for somebody types the half of the row
+             they can remember, which is as often the address as the name. -->
+        <app-list-search placeholder="Search students by name or email…"
+          label="Search your students by name or email" (search)="onSearch($event)"></app-list-search>
+      </div>
+    }
+
     <app-state-panel [loading]="list.loading()" [error]="list.error()" [empty]="list.rows().length === 0"
       emptyIcon="group" (retry)="list.start()"
-      [emptyMessage]="'No students have joined yet. Share your code — ' + (joinCode() ?? '') + ' — and they\\'ll appear here.'">
+      [emptyMessage]="emptyMessage()">
       <div class="table-wrap">
         <table mat-table [dataSource]="list.rows()" class="data-table">
           <ng-container matColumnDef="fullName">
@@ -118,12 +128,18 @@ export class StudentsListComponent implements OnInit {
    *  the first one is what fills this in. */
   joinCode = signal<string | null>(null);
 
+  /** The term the rows on screen were fetched with. Asked of the server, not applied here: the
+   *  table holds one slice of the roster, and a student who has not been scrolled to yet is
+   *  still somebody the search has to be able to find. */
+  readonly query = signal('');
+
   private http = inject(HttpClient);
   private notify = inject(NotifyService);
   private router = inject(Router);
 
   readonly list = new CursorList<StudentSummary>((cursor, limit) => {
     const params = new URLSearchParams({ limit: String(limit) });
+    if (this.query()) params.set('q', this.query());
     if (cursor) params.set('cursor', cursor);
     return this.http.get<TeacherStudentsResponse>(`/api/teacher/students?${params}`).pipe(
       tap(res => this.joinCode.set(res.joinCode)),
@@ -131,6 +147,22 @@ export class StudentsListComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    this.list.start();
+  }
+
+  controlsVisible(): boolean {
+    return this.list.total() > 1 || this.query().length > 0;
+  }
+
+  emptyMessage(): string {
+    return this.query()
+      ? `No student's name or email matches "${this.query()}".`
+      : `No students have joined yet. Share your code — ${this.joinCode() ?? ''} — and they'll appear here.`;
+  }
+
+  /** A new term is a different list, so it starts from the top rather than re-reading this one. */
+  onSearch(term: string): void {
+    this.query.set(term);
     this.list.start();
   }
 

@@ -7,6 +7,7 @@ import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatIconModule } from '@angular/material/icon';
 import { StatePanelComponent } from '../../shared/state-panel.component';
 import { ScrollMoreComponent } from '../../shared/scroll-more.component';
+import { ListSearchComponent } from '../../shared/list-search.component';
 import { AvatarComponent } from '../../shared/avatar.component';
 import { CursorPage, TeacherStatus, TeacherSummary } from '../../core/models';
 import { CursorList } from '../../core/cursor-list';
@@ -18,7 +19,7 @@ import { NotifyService } from '../../core/notify.service';
   standalone: true,
   imports: [
     DatePipe, MatTableModule, MatButtonModule, MatButtonToggleModule, MatIconModule, StatePanelComponent,
-    ScrollMoreComponent, AvatarComponent
+    ScrollMoreComponent, ListSearchComponent, AvatarComponent
   ],
   template: `
     <div class="page-head">
@@ -36,9 +37,18 @@ import { NotifyService } from '../../core/notify.service';
       </div>
     </div>
 
+    <!-- The tabs are the queue; this searches within the one being worked. A name, a subject or
+         an address — whichever of the three the administrator was given. -->
+    @if (controlsVisible()) {
+      <div class="list-controls">
+        <app-list-search placeholder="Search by name, subject or email…"
+          label="Search teachers by name, subject or email" (search)="onSearch($event)"></app-list-search>
+      </div>
+    }
+
     <app-state-panel [loading]="list.loading()" [error]="list.error()" [empty]="list.rows().length === 0"
       emptyIcon="how_to_reg" (retry)="list.start()"
-      [emptyMessage]="status() === 'Pending' ? 'Nobody is waiting right now.' : 'No teachers in this state yet.'">
+      [emptyMessage]="emptyMessage()">
       <div class="table-wrap">
         <table mat-table [dataSource]="list.rows()" class="data-table">
           <ng-container matColumnDef="fullName">
@@ -114,6 +124,10 @@ import { NotifyService } from '../../core/notify.service';
 export class ApprovalsComponent implements OnInit {
   columns = ['fullName', 'subject', 'phone', 'email', 'createdAtUtc', 'actions'];
   status = signal<TeacherStatus>('Pending');
+  /** The term the rows on screen were fetched with. It holds across a change of tab — an
+   *  administrator who has just turned somebody away and wants to check it took should not have
+   *  to type their name a second time. */
+  readonly query = signal('');
   /** The teacher whose decision is in flight, so their two buttons can't be pressed twice. */
   deciding = signal<string | null>(null);
 
@@ -122,6 +136,7 @@ export class ApprovalsComponent implements OnInit {
 
   readonly list = new CursorList<TeacherSummary>((cursor, limit) => {
     const params = new URLSearchParams({ status: this.status(), limit: String(limit) });
+    if (this.query()) params.set('q', this.query());
     if (cursor) params.set('cursor', cursor);
     return this.http.get<CursorPage<TeacherSummary>>(`/api/admin/teachers?${params}`);
   });
@@ -130,9 +145,24 @@ export class ApprovalsComponent implements OnInit {
     this.list.start();
   }
 
+  controlsVisible(): boolean {
+    return this.list.total() > 1 || this.query().length > 0;
+  }
+
+  emptyMessage(): string {
+    if (this.query()) return `Nobody ${this.status().toLowerCase()} matches "${this.query()}".`;
+    return this.status() === 'Pending' ? 'Nobody is waiting right now.' : 'No teachers in this state yet.';
+  }
+
   /** Another tab is another list, so it starts from the top rather than re-reading this one. */
   setStatus(status: TeacherStatus): void {
     this.status.set(status);
+    this.list.start();
+  }
+
+  /** A new term is a different list, so it starts from the top too. */
+  onSearch(term: string): void {
+    this.query.set(term);
     this.list.start();
   }
 
