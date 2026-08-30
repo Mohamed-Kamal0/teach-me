@@ -509,6 +509,48 @@ a:hover { text-decoration-thickness: 2px; }
 .mat-mdc-form-field-error { font-size: var(--step--1); }
 .mat-mdc-form-field-subscript-wrapper { font-size: var(--step--1); }
 
+// ---- A field the browser filled in -----------------------------------------
+// Chrome says "I filled this one in" by painting the input itself, and the input is not the field:
+// it is a strip sitting inside it, so the mark lands as a hard-edged block floating in the middle
+// of a rounded box, in a blue that belongs to no palette here. The signal is worth keeping — it is
+// what tells someone to read a value back before they send it — so it is redrawn at the size of
+// the thing it is actually about. `:has()` lifts the state from the input up to the wrapper, which
+// is the element that carries the field's shape, and clipping Chrome's own background to the
+// glyphs disposes of the block underneath (`-webkit-text-fill-color` then paints the glyphs, so
+// nothing of it survives).
+//
+// Written as three selectors because a browser that does not know `:-webkit-autofill` throws away
+// the whole rule it appears in: keeping the fill and the clip apart means neither can take the
+// other down with it.
+.mat-mdc-form-field .mat-mdc-text-field-wrapper:has(input:-webkit-autofill) {
+  background: var(--primary-wash);
+}
+
+.mat-mdc-form-field input:-webkit-autofill,
+.mat-mdc-form-field input:-webkit-autofill:hover,
+.mat-mdc-form-field input:-webkit-autofill:focus,
+.mat-mdc-form-field input:-webkit-autofill:active {
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: var(--ink);   // 12.7:1 on the wash in dark, 12.1:1 in light
+  caret-color: var(--ink);
+}
+
+// The highlight fills the wrapper, so the wrapper's corners are now the highlight's corners — and
+// they were three different radii at once. `.mat-mdc-text-field-wrapper` above asks for 8px, but
+// Material's own stylesheet is injected into <head> after this one, so at equal specificity its
+// `.mdc-text-field` wins and rounds the top two corners to 4px while squaring the bottom two
+// outright; the outline drawn over both is a fourth shape again, at its 4px default. One radius,
+// stated past the selector that was overriding it, plus the token the stroke is drawn from.
+.mat-mdc-form-field { --mdc-outlined-text-field-container-shape: var(--radius-sm); }
+.mat-mdc-form-field .mat-mdc-text-field-wrapper { border-radius: var(--radius-sm); }
+
+// The hover state layer is `inset: 0` in a wrapper that deliberately does not clip (an outlined
+// field is `overflow: visible` so the notch can sit across the stroke), so pointing at a field
+// painted a square over it — visible now that there is a fill under it to square off against.
+.mat-mdc-form-field .mat-mdc-text-field-wrapper .mat-mdc-form-field-focus-overlay {
+  border-radius: var(--radius-sm);
+}
+
 // The calendar renders in the CDK overlay too. M3's generated elevation for it comes out as a
 // shadow with no offset and no blur — invisible — which leaves a pale panel sitting on a pale
 // page with nothing to say it is floating above it.
