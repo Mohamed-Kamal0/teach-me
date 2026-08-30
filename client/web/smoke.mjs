@@ -12,8 +12,8 @@ function bad(name, detail = '') { results.push(`FAIL  ${name}${detail ? ' — ' 
 const browser = await chromium.launch();
 const consoleErrors = [];
 
-async function newPage() {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+async function newPage(options = {}) {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, ...options });
   const page = await ctx.newPage();
   page.on('console', m => { if (m.type() === 'error') consoleErrors.push(m.text()); });
   page.on('pageerror', e => consoleErrors.push('pageerror: ' + e.message));
@@ -269,6 +269,50 @@ let joinCode = null;
     else ok(`App bar stays legible at every width — ${who}`);
     await ctx.close();
   }
+}
+
+// ---------- Dark ground ----------
+// The failure mode this feature actually has is a stylesheet that loads but never applies, and
+// no unit test can see it: the tokens are right, the service is right, and the page is white.
+// One assertion against the computed background of <body> catches exactly that. Every pass above
+// stays on the default ground, so the demo script is verified where it is demoed.
+{
+  const { ctx, page } = await newPage({ colorScheme: 'dark' });
+  await page.goto(BASE, { waitUntil: 'networkidle' });
+
+  const ground = await page.evaluate(() => ({
+    body: getComputedStyle(document.body).backgroundColor,
+    scheme: getComputedStyle(document.documentElement).colorScheme,
+    bar: getComputedStyle(document.querySelector('.app-bar')).backgroundColor
+  }));
+
+  if (ground.body === 'rgb(20, 19, 23)') ok('Dark ground applies with no stored choice', ground.body);
+  else bad('Dark ground', `body is ${ground.body}, expected rgb(20, 19, 23)`);
+
+  // Without this the page grows a white scrollbar and a white native calendar button.
+  if (ground.scheme === 'dark') ok('color-scheme reaches the browser furniture');
+  else bad('color-scheme', ground.scheme);
+
+  // The bar has tokens of its own so it does not become the brightest object on a dark page.
+  if (ground.bar === 'rgb(26, 29, 37)') ok('App bar takes its own dark ground, not --primary');
+  else bad('App bar on the dark ground', ground.bar);
+
+  await page.screenshot({ path: `${SHOT}/home-dark.png`, fullPage: true });
+  await ctx.close();
+}
+
+// ---------- An explicit light choice, on a dark OS ----------
+// The case the `:not([data-theme="light"])` guard exists for, and the one a bare @media block
+// silently loses. The stored value is read by index.html's classifier before Angular exists.
+{
+  const { ctx, page } = await newPage({ colorScheme: 'dark' });
+  await page.addInitScript(() => localStorage.setItem('teachme.theme', 'light'));
+  await page.goto(BASE, { waitUntil: 'networkidle' });
+
+  const body = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  if (body === 'rgb(250, 248, 244)') ok('An explicit light choice wins on a dark OS', body);
+  else bad('Explicit light on a dark OS', `body is ${body}, expected rgb(250, 248, 244)`);
+  await ctx.close();
 }
 
 await browser.close();

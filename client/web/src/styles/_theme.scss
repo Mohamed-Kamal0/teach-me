@@ -3,6 +3,7 @@
 // components (buttons, dialogs, form fields) use the closest one (violet, near our indigo primary)
 // while the semantic tokens below carry the plan's own measured-contrast hexes directly.
 @use '@angular/material' as mat;
+@use 'dark';
 
 @include mat.core();
 
@@ -28,7 +29,7 @@ $web-theme: mat.define-theme((
   --primary: #31456A;          // 9.0:1 on surface — app bar, primary actions, links
   --danger: #9B3226;           // 6.9:1 — failed · refused · turned away
   --success: #2E6B4F;          // 5.9:1 — passed · lesson open
-  --muted: #6B7280;            // 4.6:1 — drafts, empty states
+  --muted: #666C79;            // 5.0:1 on surface, 4.6:1 on --paper-sunk — drafts, empty states
   --warning-text: #7A4E10;     // 6.8:1 — pending approval · quiz not open yet (the word)
   --tertiary-text: #8A5A12;    // 5.6:1 — what's-new counts, joining code (the word)
   --tertiary: #C9852A;         // 2.9:1 — badge/rule FILL ONLY, never text on paper
@@ -70,6 +71,39 @@ $web-theme: mat.define-theme((
   --radius-sm: 8px;
   --shadow-1: 0 1px 2px rgba(31, 41, 55, 0.06);
   --shadow-2: 0 6px 20px rgba(31, 41, 55, 0.10);
+
+  // The browser draws its own furniture — scrollbars, form-control chrome, the date picker's
+  // native glyphs — from this and nothing else.
+  color-scheme: light;
+
+  // ---- The label on a fill (darkmode.md §7) --------------------------------
+  // Grep this client for a colour literal and it is nearly always `#fff` sitting on a fill: a
+  // light-mode habit that encodes "the fill is dark, so its label is white". That stops being
+  // true the moment --primary becomes a pale indigo, so the pairing gets named rather than
+  // assumed. Each is measured against the fill it belongs to, not against the page.
+  --on-primary: #FFFFFF;       // 9.6:1 on --primary — a filled primary button
+  --on-danger: #FFFFFF;        // 7.3:1 — the destructive confirm and the error toast
+  --on-success: #FFFFFF;       // 6.3:1 — the success toast
+  // Ink on the two amber fills. Today --ink happens to be the same colour, which is exactly why
+  // this needed splitting out: --ink is *body text*, and on a dark ground body text turns pale
+  // and would land 2.2:1 on a badge. Same value here, different job.
+  --on-fill: #1F2937;          // 4.8:1 on --tertiary, 3.8:1 on --warning
+
+  // ---- The app bar ---------------------------------------------------------
+  // Its own tokens rather than --primary, because in dark the bar cannot be the app's primary
+  // colour without becoming the brightest thing on screen. Here they resolve to what the bar
+  // already was.
+  --bar-bg: var(--primary);
+  --bar-ink: #FFFFFF;
+  --bar-hover-bg: #E3E3E6;
+  --bar-hover-ink: #1F2937;
+  --bar-current-bg: #FFFFFF;
+  --bar-current-ink: var(--primary);
+
+  // The scrim over the home page's hero photograph. The photo is untouched on either ground;
+  // what changes is what is laid over it.
+  --scrim-from: rgba(250, 248, 244, 0.80);
+  --scrim-to: rgba(250, 248, 244, 0.90);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -135,8 +169,8 @@ table, .tabular-nums { font-variant-numeric: tabular-nums; }
 .text-tertiary { color: var(--tertiary-text); }
 .text-muted { color: var(--muted); }
 
-.chip-fill-tertiary { background: var(--tertiary); color: var(--ink); }
-.chip-fill-warning { background: var(--warning); color: var(--ink); }
+.chip-fill-tertiary { background: var(--tertiary); color: var(--on-fill); }
+.chip-fill-warning { background: var(--warning); color: var(--on-fill); }
 
 // The utility face: small, letterspaced Inter for eyebrows, column labels and metadata. It is
 // the third type role the plan asks for, and it keeps headings from doing two jobs at once.
@@ -347,16 +381,40 @@ table, .tabular-nums { font-variant-numeric: tabular-nums; }
   @include mat.all-component-themes($web-theme);
 }
 
+// ---- The second ground (docs/darkmode.md §4) -------------------------------
+// Three selectors, and each one is load-bearing:
+//
+//   * the media block is what makes "system" free — with no attribute at all the OS decides and
+//     no script has to run, re-run, or be listened to;
+//   * the :not() guard is what lets an explicit *light* choice win on a dark OS, which is the
+//     case a bare @media block silently loses;
+//   * the attribute selector is what lets an explicit *dark* choice win on a light OS.
+//
+// `dark-material` follows `dark-tokens` inside both, so the surfaces pinned by hand below still
+// outrank Material's own colours exactly as they do in light — they paint from the tokens, so
+// they follow the ground without being written a second time.
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    @include dark.dark-tokens;
+    @include dark.dark-material;
+  }
+}
+
+:root[data-theme='dark'] {
+  @include dark.dark-tokens;
+  @include dark.dark-material;
+}
+
 // M3's generated tonal palettes can't express the plan's exact measured-contrast hexes, so the
 // surfaces that carry the app's identity are pinned to the tokens above after theming.
 .mat-mdc-unelevated-button.mat-primary,
 .mat-mdc-raised-button.mat-primary,
 .mat-mdc-fab.mat-primary {
   --mdc-filled-button-container-color: var(--primary);
-  --mdc-filled-button-label-text-color: #fff;
+  --mdc-filled-button-label-text-color: var(--on-primary);
   --mdc-fab-container-color: var(--primary);
   background-color: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .mat-mdc-button.mat-primary,
@@ -388,9 +446,9 @@ table, .tabular-nums { font-variant-numeric: tabular-nums; }
 .mat-mdc-unelevated-button.mat-primary:has(app-busy-ring):disabled,
 .mat-mdc-raised-button.mat-primary:has(app-busy-ring):disabled {
   --mdc-filled-button-disabled-container-color: var(--primary);
-  --mdc-filled-button-disabled-label-text-color: #fff;
+  --mdc-filled-button-disabled-label-text-color: var(--on-primary);
   background-color: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   opacity: 0.9;
 }
 
@@ -465,7 +523,14 @@ a:hover { text-decoration-thickness: 2px; }
   border-radius: var(--radius-sm) !important;
   box-shadow: var(--shadow-2);
 }
+// The label colour follows the surface it lands on, so an error toast and a success toast each
+// get the ink measured against their own fill rather than a shared #fff that only works while
+// both fills happen to be dark.
 .toast-error .mdc-snackbar__surface { background: var(--danger) !important; }
+.toast-error .mdc-snackbar__label,
+.toast-error .mat-mdc-snack-bar-action { color: var(--on-danger) !important; }
 .toast-success .mdc-snackbar__surface { background: var(--success) !important; }
-.toast .mdc-snackbar__label { color: #fff !important; font-size: var(--step-0); }
-.toast .mat-mdc-snack-bar-action { color: #fff !important; font-weight: 600; }
+.toast-success .mdc-snackbar__label,
+.toast-success .mat-mdc-snack-bar-action { color: var(--on-success) !important; }
+.toast .mdc-snackbar__label { font-size: var(--step-0); }
+.toast .mat-mdc-snack-bar-action { font-weight: 600; }

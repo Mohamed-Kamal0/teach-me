@@ -51,7 +51,9 @@ const SIZE_PX: Record<AvatarSize, number> = { sm: 32, md: 48, lg: 96 };
       object-fit: cover;
       background: var(--paper-sunk);
     }
-    .avatar--img { border: 1px solid var(--border); }
+    /* The hairline is on both tiles, not just the photo: a dark-blue initials tile on a dark
+       card without one reads as a hole punched in the card rather than as a tile. */
+    .avatar--img, .avatar--initials { border: 1px solid var(--border); }
     .avatar--initials {
       color: #fff;
       font-weight: 600;
@@ -102,6 +104,11 @@ export class AvatarComponent implements OnChanges {
       hash = (hash * 31 + this.userId.charCodeAt(i)) | 0;
     }
     const hue = (Math.abs(hash) % 12) * 30;
-    return `hsl(${hue} 55% 42%)`;
+    // 30%, not 42%. At 42% the olive — hue 60, one of the twelve — put white initials on the
+    // tile at 2.59:1, failing AA on the light ground since the component was written and
+    // invisible in review because eleven of the twelve pass and the twelfth only appears for
+    // whoever's id happens to hash to it. At 30% the worst of the twelve is 4.72:1 and the rest
+    // land between 5:1 and 13:1. `node contrast.mjs` checks all twelve, which is the point.
+    return `hsl(${hue} 55% 30%)`;
   }
 }

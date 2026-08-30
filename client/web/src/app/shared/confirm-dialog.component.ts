@@ -30,7 +30,9 @@ export interface ConfirmDialogData {
   styles: [`
     h2 { display: flex; align-items: center; gap: 0.5rem; }
     mat-dialog-content { color: var(--muted); }
-    .confirm { background: var(--danger); color: #fff; }
+    /* The label is measured against the fill it sits on, not assumed white: on the dark
+       ground --danger is a pale coral and #fff on it is unreadable. */
+    .confirm { background: var(--danger); color: var(--on-danger); }
   `]
 })
 export class ConfirmDialogComponent {

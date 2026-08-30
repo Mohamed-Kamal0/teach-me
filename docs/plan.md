@@ -11,6 +11,11 @@
 > ([`ai.md`](ai.md)). **§12** is the one-page summary of all three; the sections above it are
 > the plan of record and have been updated in place. Nothing here was cut to make room —
 > every original requirement still holds, and the AI helper keeps the phrase list underneath it.
+>
+> **Extended again, 2026-08-30 — dark mode** ([`darkmode.md`](darkmode.md), folded in as **§12.7**).
+> It adds no table, no endpoint and no screen: §8 already put every colour behind a token, so a
+> second ground is a second set of values for the same names. §8's measured-contrast table is
+> duplicated rather than relaxed, and `contrast.mjs` now recomputes both grounds on demand.
 
 **Stack:** ASP.NET Core 10 Web API + EF Core (SQLite) · Angular 18 + Angular Material · httpOnly cookie auth · ImageSharp for photos · Google Gemini behind one interface for the helper.
 
@@ -47,7 +52,8 @@ The Project/
     plan.md                       # this file
     FEATURES.md                   # every feature end to end, with the code that implements it
     DEPLOY.md                     # the runbook
-    media.md / discover.md / ai.md  # the plan behind each of the three later features
+    media.md / discover.md / ai.md / darkmode.md
+                                  # the plan behind each of the later features
   TeachMe.slnx
   server/TeachMe.Api/
     Program.cs
@@ -71,8 +77,11 @@ The Project/
   client/web/                     # ng new web --standalone --routing --style=scss
     proxy.conf.json               # /api -> the API, so the cookie is same-origin in dev
     smoke.mjs / smoke-api-down.mjs  # Playwright: the demo script, and the API killed underneath it
+    contrast.mjs                  # §8 — both palettes re-measured, non-zero exit below 4.5:1
     src/styles/_theme.scss        # the educational theme, §8
-    src/app/core/                 # auth service, credentials + error interceptors, guards, api clients
+    src/styles/_dark.scss         # §12.7 — the same tokens, second ground, written once
+    src/app/core/                 # auth service, credentials + error interceptors, guards, api clients,
+                                  #   ThemeService (§12.7 — light | dark | system, on the device)
     src/app/shared/               # StatePanelComponent (loading | error | empty), MediaEmbedComponent,
                                   # AvatarComponent, PhotoCardComponent, ReleaseRailComponent, dialogs
     src/app/features/             # home, teachers (public directory), auth, admin, teacher,
@@ -505,7 +514,7 @@ Per **enrollment**, comparing the three moments against that row's own `LastView
 
 The subject is teaching, and the interface should read that way: calm, bookish, legible at the back of a room. The look is defined once in `src/styles/_theme.scss` as an Angular Material M3 theme, and nothing overrides it component by component.
 
-**Palette** — one academic base, one warm accent, and semantic colours that always pair with an icon and a word, never colour alone. Every ratio below is measured against `surface` `#FAF8F4`, and the "text?" column is the rule, not an aspiration — AA needs **4.5:1** for body text:
+**Palette** — one academic base, one warm accent, and semantic colours that always pair with an icon and a word, never colour alone. Every ratio below is measured against `surface` `#FAF8F4`, and the "text?" column is the rule, not an aspiration — AA needs **4.5:1** for body text. **The same names carry a second set of values on a dark ground** — measured the same way, in [`darkmode.md`](darkmode.md) §6 and summarised in §12.7:
 
 | Token           | Colour                   | On `surface` | Text?         | Used for                                                      |
 | :-------------- | :----------------------- | :----------- | :------------ | :------------------------------------------------------------ |
@@ -519,7 +528,9 @@ The subject is teaching, and the interface should read that way: calm, bookish, 
 | `tertiary`      | warm amber `#C9852A`     | 2.9:1        | **fill only** | badge and rule fills, with `ink #1F2937` on top (**4.8:1** ✓) |
 | `warning`       | amber `#B4741A`          | 3.6:1        | **fill only** | chips and borders, never a sentence                           |
 
-**The two bright ambers are fills, never text on paper.** They were the accent colour and they failed the AA claim outright at 2.9:1 and 3.6:1 — so they keep the job they are good at (a badge that catches the eye) and hand the words to the darkened pair. `_theme.scss` names them apart so the mistake cannot be made by accident, and the ratios above get re-checked in a browser during the Day 18 theme slot, because a stated accessibility claim is checkable in ten seconds by anyone who doubts it.
+**The two bright ambers are fills, never text on paper.** They were the accent colour and they failed the AA claim outright at 2.9:1 and 3.6:1 — so they keep the job they are good at (a badge that catches the eye) and hand the words to the darkened pair. `_theme.scss` names them apart so the mistake cannot be made by accident, and the ratios above get re-checked in a browser during the Day 18 theme slot, because a stated accessibility claim is checkable in ten seconds by anyone who doubts it. **Since §12.7 that check is a script** — `client/web/contrast.mjs` recomputes every pair on both grounds and exits non-zero below 4.5:1; it reproduces the numbers in this table exactly, which is what makes the dark column worth the same trust.
+
+**On either ground, a colour that carries a word is named for the pairing, not for the hue.** `--on-primary`, `--on-danger`, `--on-success` and `--on-fill` (§12.7) exist because "white on the fill" is a light-mode assumption: dark's primary is a *light* indigo and a white label on it is 1.4:1. `--on-fill` in particular splits a job `--ink` was quietly doing twice — body text, and ink on the two ambers — which are the same colour in light and opposite colours in dark.
 
 **Typography** — a serif for headings and a sans for everything else, the schoolbook pairing:
 
@@ -535,7 +546,7 @@ The subject is teaching, and the interface should read that way: calm, bookish, 
 
 **Tone.** Empty and error states speak plainly and always say what to do next: _"No students have joined yet. Share your code — **7KQ4M2XB** — and they'll appear here."_ Never "No data available".
 
-**Accessibility, not decoration.** Every text token above is at **4.5:1 or better** on `surface`, with the measured ratio written down; every status is icon + word + colour; every form control has a real `<label>`; focus rings are never removed. This is a teaching platform and someone's screen reader is a real user.
+**Accessibility, not decoration.** Every text token above is at **4.5:1 or better** on `surface` — and on the dark `paper` of §12.7 — with the measured ratio written down; every status is icon + word + colour; every form control has a real `<label>`; focus rings are never removed. This is a teaching platform and someone's screen reader is a real user.
 
 **Shared components that make Req 23 cheap:**
 
@@ -738,6 +749,7 @@ Everything in §1–§11 was planned before a line was written. This section is 
 | 12.4 | Resetting your own password        | this section                 | none            | the account is taken from the cookie, never from the request |
 | 12.5 | Finding a teacher by subject       | this section                 | `Teachers.Subject` | the directory still answers in aggregates, and only about approved teachers |
 | 12.6 | Cursor scrolling on every list     | this section                 | none            | a row is served once and never skipped, however the list changes under the reader |
+| 12.7 | Dark mode                          | [`darkmode.md`](darkmode.md) | none            | every measured contrast ratio in §8 is matched on the second ground, not merely claimed |
 
 ### 12.1 Profile photos — bytes in the database, on purpose
 
@@ -889,6 +901,24 @@ The tripwire is a 1px sentinel **600px below** the last row, watched by an `Inte
 **What it cost.** The pager on Discover, which is a gain: a visitor browsing courses is looking, not filing, and *"page 3 of 7"* asks them to keep a place they never wanted to keep. And the whole-list reorder endpoint, which is the one real casualty — §3 and §5 record what that contract bought and why a screen that no longer holds the whole course could no longer honour it.
 
 **Proved by** suite F's cursor walk and suite I (§10): walking a list one row at a time reaches every row exactly once, in the same order as one whole-list request, including across a reorder — and `core/cursor-list.spec.ts` pins the client half, the two error paths and the stale-response guard included.
+
+### 12.7 Dark mode — the same palette, a second ground
+
+**The gap.** §8 defined the look once, in tokens, on `:root`, and nothing in the app paints from a literal — which is exactly why a second ground costs a set of values rather than a second design. What it did not do is say which ground. An app read on a phone at night in the ground its author happened to be sitting in is a choice made *for* the reader, and every other app on their device has already stopped making it.
+
+**Three decisions hold it, and the full plan is [`darkmode.md`](darkmode.md):**
+
+- **The choice lives on the device, not on the account.** No column, no `MeResponse` field, no endpoint — and the reason is not that a column would be hard. The home page (Req 7) and the directory (§12.2) are read **with no session at all**; a preference fetched from `/api/me` cannot reach the first page a visitor sees, so a server-stored theme would leave the app's own front door in the ground the visitor did not pick, and then snap when they signed in. A ground is also a property of the room rather than of the person — the same student reads in bed and in a lab — so syncing it across devices syncs the mistake. It is `localStorage`, three states (`light | dark | system`, system by default), and `Users` keeps its property of holding only identity.
+- **CSS resolves it, not JavaScript.** One `data-theme` attribute on `<html>` and three selectors: `:root` for light, `@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) }` so *system* is free and an explicit **light** choice still wins on a dark OS, and `:root[data-theme='dark']` so an explicit **dark** choice wins on a light one. `color-scheme` is set beside the tokens, which is what makes the browser's own furniture — scrollbars, and the datepicker glyphs four of these forms depend on — come out dark too. The dark values are one `@mixin` emitted twice, so the two dark selectors cannot drift.
+- **The one line of script is in `<head>`, and it is there for the splash.** `index.html` paints a ring before the bundle loads, because `AuthService` bootstraps against an API that may be cold — and it is written in literals. A dark reader would get a full-screen white flash on every cold load, which is worse than no dark mode. Four inline, synchronous lines read `localStorage` and stamp the attribute before first paint; the splash then paints from `--surface`, `--primary` and `--muted`, so the boot ring and the route ring stay the one continuous wait §8 designed.
+
+**The measured claim is duplicated, not weakened.** Every text token clears **4.5:1** on the dark ground as well — `ink` 13.75:1, `primary` 9.12:1, `danger` 7.59:1, `success` 8.60:1, `muted` 6.85:1, and the two amber *words* at 8.85:1 and 9.62:1. The two amber **fills** and the ink on them do not move at all between grounds — still `#C9852A` and `#B4741A` under `#1F2937`, still 4.80:1 and 3.81:1 — because §8's demotion of the accent to a fill is the decision dark mode would most easily let lapse, and keeping the pair fixed is what keeps it. The one structural change is that elevation stops being a shadow: `rgba(31,41,55,…)` is invisible on a dark page, so `--border` carries the card off the ground instead.
+
+**What it cost, and what it caught.** Fourteen colour literals across five files, nearly all `#fff` on a fill — an assumption that stops being true the moment `--primary` is a light indigo — replaced by four `--on-*` tokens and five `--bar-*` ones. `--ink` turned out to be doing two jobs that are the same colour in light and opposite colours in dark, and splitting them is a correctness fix on both grounds. And `contrast.mjs`, written to check the new palette, found an existing one: `AvatarComponent`'s initials tile is `hsl(h 55% 42%)` under white, which at hue 60 is **2.59:1** and has failed AA on the light ground since the component was written — invisible in review because eleven of twelve hues pass. Lightness 30% puts the worst hue at 4.72:1.
+
+**Proved by** `contrast.mjs` (both palettes, non-zero exit below 4.5:1 — it reproduces §8's own published numbers exactly), `core/theme.service.spec.ts` (the explicit-light-on-dark-OS case, a junk stored value, an OS flip while the choice is and is not `system`, and a `localStorage` that throws), and one added `smoke.mjs` pass that opens the public home with `colorScheme: 'dark'` and asserts the computed `<body>` background is the dark surface — the one failure mode, a stylesheet that loads and never applies, that no unit test can see.
+
+**Rollback is one line:** delete the `@use 'dark'` in `_theme.scss` and every token falls back to its `:root` value — the same shape of rollback as the AI helper's unset key.
 
 ## Appendix C — The public directory is the first anonymous read path beyond `/api/public/home`
 

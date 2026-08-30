@@ -129,8 +129,10 @@ import { AuthService } from '../../core/auth.service';
       margin-inline: calc(-1 * var(--gutter));
       margin-top: clamp(-2rem, -3vw, -1rem);
       padding: clamp(1.5rem, 4vw, 2.75rem) var(--gutter);
+      /* The photograph is never dimmed, tinted or filtered. What carries the words is the
+         scrim laid over it, and that is the part that follows the ground. */
       background:
-        linear-gradient(180deg, rgba(250, 248, 244, 0.80), rgba(250, 248, 244, 0.90)),
+        linear-gradient(180deg, var(--scrim-from), var(--scrim-to)),
         url('/Elearning_platform.jpg') center / cover no-repeat;
     }
     .hero__inner {

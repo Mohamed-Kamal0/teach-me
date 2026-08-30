@@ -157,9 +157,12 @@ import { CursorList } from '../../core/cursor-list';
       width: 2.25rem;
       height: 2.25rem;
       background: var(--primary);
-      color: #fff;
+      color: var(--on-primary);
     }
-    .search__go:hover { background: var(--ink); }
+    /* --ink is body text, which on the dark ground is nearly white — hovering to it would turn
+       the button into a bright square. --primary-wash darkens on that ground instead, so the
+       hover stays a step away from the resting colour in the same direction on both. */
+    .search__go:hover { background: var(--primary-wash); color: var(--primary); }
     .search__go:active { transform: scale(0.94); }
     .grid {
       display: grid;

@@ -1,0 +1,113 @@
+// The second ground (docs/darkmode.md). Same token names, same hues, second set of values —
+// this is not a second design, and nothing in here is a new guarantee.
+//
+// Written as mixins because `_theme.scss` emits them under TWO selectors: the media query that
+// makes "follow the OS" free, and the attribute that makes an explicit choice win. One mixin,
+// emitted twice, is what stops those two copies drifting apart — which is the whole bug this
+// file's shape exists to prevent.
+//
+// Every ratio in the comments is measured against --paper (#1C1B20), where most text sits; the
+// page ground is darker still, so each one is a lower bound. They are reproduced by
+// `node contrast.mjs`, which is the only reason to trust them.
+@use '@angular/material' as mat;
+
+// The colour styles ARE emitted more than once here, on purpose: once on `:root` for the light
+// ground, and once inside each of the two dark selectors. Material's duplication warning exists
+// to catch that happening by accident, which is not what this is.
+mat.$theme-ignore-duplication-warnings: true;
+
+// Material's own components, recoloured. Colour only — the type scale and the density do not
+// change between grounds, and re-emitting them here would duplicate most of the stylesheet to
+// no visual effect.
+$dark-theme: mat.define-theme((
+  color: (
+    theme-type: dark,
+    primary: mat.$azure-palette,
+    tertiary: mat.$orange-palette,
+  ),
+));
+
+@mixin dark-tokens {
+  // Tells the browser to draw its own furniture dark: scrollbars, form-control chrome and — the
+  // one that actually shows on this app — the date picker's native glyphs, which four forms use.
+  // Without it a dark page grows a white scrollbar and a white calendar button.
+  color-scheme: dark;
+
+  --surface: #141317;          // page ground
+  --primary: #A8BEE8;          // 9.12:1 on paper — links, primary actions
+  --danger: #F0948A;           // 7.59:1 — failed · refused · turned away
+  --success: #7CC7A2;          // 8.60:1 — passed · lesson open
+  --muted: #A7A2AC;            // 6.85:1 — drafts, empty states
+  --warning-text: #E5B25C;     // 8.85:1 — pending approval · quiz not open yet (the word)
+  --tertiary-text: #E6BC72;    // 9.62:1 — what's-new counts, joining code (the word)
+
+  // The two ambers do not move, and that is the point. plan §8 demoted them from text to fill
+  // when the accent failed its own AA claim at 2.9:1; dark is where that demotion gets tested,
+  // because the tempting move is to lighten them into text-safe amber and let the distinction
+  // lapse. Neither colour in the pair changed, so neither did either number: --on-fill on these
+  // is 4.80:1 and 3.81:1 on both grounds.
+  --tertiary: #C9852A;         // badge/rule FILL ONLY, never text
+  --warning: #B4741A;          // chip/border FILL ONLY, never a sentence
+
+  --ink: #E9E6E1;              // 13.75:1 — body text, headings
+  --border: #332F38;           // the hairline that does the work a shadow used to
+
+  // Derived surfaces. A dark card is told apart from a dark page by being one step lighter with
+  // a hairline, not by a shadow nobody can see.
+  --paper: #1C1B20;            // cards and tables
+  --paper-sunk: #26242B;       // table headers, drawer head, inset strips
+  --rule: #2A2830;             // hairline between rows
+
+  // The washes invert their relationship to the ground. In light a wash is a tint — paper with
+  // a little of the hue in it. Here it has to be a shade: near-black carrying the hue, or the
+  // notice becomes a bright block on a dark page and shouts. Built from the hue over --surface,
+  // not from the light wash darkened.
+  --primary-wash: #232A3A;
+  --danger-wash: #33211F;      // --danger on it: 6.75:1
+  --success-wash: #1D2E27;     // --success on it: 7.16:1
+  --warning-wash: #302617;     // --warning-text on it: 7.67:1
+
+  // Role coding — chip ink on chip fill: admin 8.54:1, teacher 7.65:1, student 7.52:1. The
+  // three-login demo stays legible from the back of the room on either ground.
+  --role-admin-bg: var(--paper-sunk);
+  --role-admin-ink: #C3C0C8;
+  --role-teacher-bg: var(--primary-wash);
+  --role-teacher-ink: var(--primary);
+  --role-student-bg: #17302B;
+  --role-student-ink: #7FCCB8;
+
+  // The label on a fill. Dark's primary is a *light* indigo, so #fff on it is 1.4:1 — this is
+  // the pairing dark mode actually breaks, and the reason these tokens exist at all.
+  --on-primary: #12151C;       // 9.74:1 on --primary
+  --on-danger: #2A100C;        // 7.90:1 on --danger
+  --on-success: #082016;       // 8.59:1 on --success
+  --on-fill: #1F2937;          // unchanged: the ambers didn't move, so neither does their ink
+
+  // The app bar is NOT --primary here. Substituting dark's pale indigo would make the chrome the
+  // brightest object on screen and invert the hierarchy, so the bar gets a ground of its own —
+  // elevated and blue-leaning, but still darker than the page it sits over.
+  --bar-bg: #1A1D25;
+  --bar-ink: var(--ink);              // 13.54:1 on the bar
+  --bar-hover-bg: #2A2E38;
+  --bar-hover-ink: var(--ink);        // 10.91:1 on the hover fill
+  --bar-current-bg: #2E3543;
+  --bar-current-ink: var(--primary);  // 6.56:1 on the pill
+
+  // The hero photo's readability comes from a scrim, not from the photo. The picture is never
+  // dimmed, tinted or filtered (§9) — what changes is what is laid over it.
+  --scrim-from: rgba(20, 19, 23, 0.80);
+  --scrim-to: rgba(20, 19, 23, 0.90);
+
+  // Ink smoke is invisible on a dark ground. Black still reads, but --border above is what
+  // actually separates the planes now; both tokens already exist and every card already uses
+  // both, so this is a value change and not a markup change.
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+// Emitted immediately after the tokens, inside the same two selectors, so the hand-pinned
+// Material surfaces further down _theme.scss keep winning on specificity exactly as they do in
+// light. They read from the tokens above, so they follow the ground without being written twice.
+@mixin dark-material {
+  @include mat.all-component-colors($dark-theme);
+}

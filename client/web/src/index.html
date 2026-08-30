@@ -2,10 +2,24 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <!-- Before any stylesheet, and deliberately inline and synchronous: an external or deferred
+       script runs after first paint, which is the flash it exists to prevent. It reads and
+       stamps and does nothing else — resolving "system" is left to CSS, which needs no script.
+       The key is `THEME_KEY` in src/app/core/theme.service.ts; changing it there changes it here. -->
+  <script>
+    try {
+      var t = localStorage.getItem('teachme.theme');
+      if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  </script>
   <title>Teach Me</title>
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <!-- Mobile browser chrome matches the app bar on either ground. The media queries are the
+       right answer while the choice is "system"; ThemeService rewrites them when it isn't. -->
+  <meta name="theme-color" content="#31456A" media="(prefers-color-scheme: light)" data-ground="light">
+  <meta name="theme-color" content="#1A1D25" media="(prefers-color-scheme: dark)" data-ground="dark">
+  <link rel="icon" type="image/png" href="education.png">
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
@@ -20,6 +34,10 @@
       <p class="app-splash__text">Teach Me</p>
     </div>
   </app-root>
+  <!-- Painted from the tokens rather than from literals, so a dark-mode reader does not get a
+       full-screen white flash on every cold load. These are the same three values
+       `.route-loading__ring` uses, which keeps the boot ring and the route ring one continuous
+       wait rather than two. The rules sit here, after the stylesheet link, on purpose. -->
   <style>
     .app-splash {
       position: fixed;
@@ -29,14 +47,14 @@
       align-items: center;
       justify-content: center;
       gap: 1.25rem;
-      background: #FAF8F4;
+      background: var(--surface);
       font-family: 'Inter', system-ui, sans-serif;
     }
     .app-splash__ring {
       width: 38px;
       height: 38px;
-      border: 3px solid rgba(49, 69, 106, 0.18);
-      border-top-color: #31456A;
+      border: 3px solid var(--primary-wash);
+      border-top-color: var(--primary);
       border-radius: 50%;
       animation: app-splash-spin 0.9s linear infinite;
     }
@@ -46,7 +64,7 @@
       font-weight: 600;
       letter-spacing: 0.14em;
       text-transform: uppercase;
-      color: #6B7280;
+      color: var(--muted);
     }
     @keyframes app-splash-spin { to { transform: rotate(360deg); } }
     @media (prefers-reduced-motion: reduce) {

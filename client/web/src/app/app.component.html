@@ -95,6 +95,20 @@
       }
 
       <div class="bar__side bar__side--end">
+        <!-- Outside the bootstrapped gate on purpose: the ground is not a property of the
+             session, and this is the one control in the bar that is worth having before the
+             session check has come back. -->
+        <button
+          mat-icon-button
+          class="theme-toggle"
+          (click)="theme.toggle()"
+          [attr.aria-label]="themeLabel()"
+          [attr.aria-pressed]="theme.resolved() === 'dark'"
+          [matTooltip]="themeLabel()"
+        >
+          <mat-icon>{{ themeIcon() }}</mat-icon>
+        </button>
+
         @if (auth.bootstrapped()) {
           @if (auth.isAuthenticated()) {
             <!-- The role as a badge: the glyph carries it in the bar, the word stays available

@@ -9,6 +9,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { routeFade } from './app.animations';
 import { AuthService } from './core/auth.service';
 import { NotifyService } from './core/notify.service';
+import { ThemeService } from './core/theme.service';
 import { HelperWidgetComponent } from './features/helper/helper-widget.component';
 import { ServerDownComponent } from './shared/server-down.component';
 import { AvatarComponent } from './shared/avatar.component';
@@ -20,6 +21,7 @@ export interface NavLink {
   label: string;
   icon: string;
 }
+
 
 @Component({
   selector: 'app-root',
@@ -36,6 +38,7 @@ export interface NavLink {
 })
 export class AppComponent {
   readonly auth = inject(AuthService);
+  readonly theme = inject(ThemeService);
   private router = inject(Router);
   private notify = inject(NotifyService);
 
@@ -112,6 +115,17 @@ export class AppComponent {
         if (!this.reduceMotion) this.routeKey.set(event.urlAfterRedirects.split('?')[0]);
       }
     });
+  }
+
+  /** The glyph names the ground the press would take you to, not the one you are already on —
+   *  a button that pictures the current state says nothing about what pressing it does. */
+  themeIcon(): string {
+    return this.theme.resolved() === 'dark' ? 'light_mode' : 'dark_mode';
+  }
+
+  /** The word for the same thing, for the tooltip and for a screen reader, which get no glyph. */
+  themeLabel(): string {
+    return this.theme.resolved() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
   }
 
   /** Where the account menu's "Profile" link points, or null for roles without a profile page. */

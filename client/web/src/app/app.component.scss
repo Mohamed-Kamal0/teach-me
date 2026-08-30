@@ -13,20 +13,21 @@
   gap: 0.25rem;
   padding-inline: clamp(0.5rem, 2vw, 1rem);
   margin-right: calc(100% - 100vw);
-  background: var(--primary);
-  color: #fff;
+  // Not --primary: on the dark ground that token is a *pale* indigo, and a pale band under a
+  // dark page makes the chrome the brightest object on screen. The bar has its own pair, which
+  // in light resolves to exactly what it already was.
+  background: var(--bar-bg);
+  color: var(--bar-ink);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12), var(--shadow-1);
 
   // MDC paints its buttons from its own tokens, which outrank the `color` above — without these
-  // the hamburger and the account icon render M3's dark grey on the indigo bar (1.03:1, i.e.
-  // invisible) and the navigation has no findable trigger. Pinned: 9.59:1.
-  .mat-mdc-icon-button {
-    --mdc-icon-button-icon-color: #fff;
-    color: #fff;
-  }
-  .mat-mdc-button {
-    --mdc-text-button-label-text-color: #fff;
-    color: #fff;
+  // the hamburger, the appearance control and the account icon render M3's dark grey on the
+  // indigo bar (1.03:1, i.e. invisible) and the navigation has no findable trigger. Pinned:
+  // 9.59:1 light, 13.54:1 dark. One rule for both button kinds — each ignores the other's token.
+  .mat-mdc-icon-button, .mat-mdc-button {
+    --mdc-icon-button-icon-color: var(--bar-ink);
+    --mdc-text-button-label-text-color: var(--bar-ink);
+    color: var(--bar-ink);
   }
 }
 
@@ -35,14 +36,14 @@
   align-items: center;
   gap: 0.5rem;
   min-width: 0;                 // lets the title ellipsis instead of shoving the bar wider
-  color: #fff;
+  color: var(--bar-ink);
   text-decoration: none;
 
   mat-icon { flex: none; }
 
   span {
     font-size: clamp(0.95rem, 0.8rem + 0.8vw, 1.15rem);
-    color: #fff;
+    color: var(--bar-ink);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -68,7 +69,7 @@
 
   a {
     position: relative;
-    color: #fff;
+    color: var(--bar-ink);
     border-radius: var(--radius-sm);
     transition: background-color 0.2s ease, color 0.2s ease;
     .mdc-button__label { display: inline-flex; align-items: center; gap: 0.35rem; }
@@ -91,23 +92,23 @@
     }
 
     &:hover:not(.is-current) {
-      background: #e3e3e6;
-      color: var(--ink);
-      mat-icon { color: var(--ink); }
+      background: var(--bar-hover-bg);
+      color: var(--bar-hover-ink);
+      mat-icon { color: var(--bar-hover-ink); }
       &::after { transform: scaleX(0.4); }
     }
   }
   // The page you are on, marked in the bar rather than left to memory.
   a.is-current {
-    background: #fff;
-    color: var(--primary);
+    background: var(--bar-current-bg);
+    color: var(--bar-current-ink);
     font-weight: 600;
-    mat-icon { color: var(--primary); }
+    mat-icon { color: var(--bar-current-ink); }
     // A short pop each time this tab becomes the current one.
     animation: bar-tab-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
 
     &::after { transform: scaleX(1); }
-    &:hover { background: rgba(255, 255, 255, 0.88); }
+    &:hover { background: color-mix(in srgb, var(--bar-current-bg) 88%, var(--bar-bg)); }
   }
 }
 
@@ -123,6 +124,24 @@
 @media (prefers-reduced-motion: reduce) {
   .bar-nav a,
   .bar-nav a::after { transition: none; animation: none; }
+}
+
+// The appearance toggle is one 40px icon button in the end group, and it needs no rules of its
+// own: it takes --bar-ink from the block above at every width. It sheds at no breakpoint — the
+// bar drops its centre nav at 1023px and its role badge at 400px, and this is narrower than
+// either. It lives in the bar rather than behind a settings page because the people who need it
+// most arrive with no account: /, /discover and /login are all read signed out, and a control
+// behind a session cannot reach them.
+//
+// The glyph rotates a quarter turn as the ground changes, which is the one motion in the app
+// that is about a state change rather than about a wait — and it stops for a reader who asked
+// for less of it.
+.theme-toggle mat-icon { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+.theme-toggle:hover mat-icon { transform: rotate(-25deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle mat-icon { transition: none; }
+  .theme-toggle:hover mat-icon { transform: none; }
 }
 
 // A glyph alone is a guess. The word says what the button opens, so the drawer is not something
